@@ -130,7 +130,7 @@ def loadObj(filename, debug = False):
 
                 
         elif words[0] == "g":
-            if len(words) > 0:
+            if len(words) > 1:
                 print 'Loaded model [' + words[1] + ']'
             new_part = Model_Object()
             new_part.elements.offset = element_count
@@ -430,14 +430,20 @@ def loadTexture(model,textures):
             loadTexture(mod,textures)
     elif type(model) == Model_Object:
         mat = model.material
-        for tex_name in mat.texture_names():
-
-            if not tex_name in textures:
+        for tex_name in mat.texture2d_names():
+            if tex_name not in textures.samplers2d:
                 tex = Model_Texture()
                 tex.set_texture_file(tex_name)
                 tex.load()
                 print 'Loaded texture [' + tex_name + ']'
-                textures[tex_name] = tex
+                textures.samplers2d[tex_name] = tex
+
+        for name,xp,xn,yp,yn,zp,zn in mat.textureCM_names():
+            if name not in textures.samplersCM:
+                tex = Model_Cubemap_Texture()
+                tex.set_texture_files(xp,xn,yp,yn,zp,zn)
+                tex.load()
+                textures.samplersCM[name] = tex
 
 def main():
     obj = model()

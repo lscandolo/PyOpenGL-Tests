@@ -3,6 +3,13 @@ from cgkit.all import vec3
 
 def calculateTangents(positions,normals,texcoords,elements):
 
+#We want our tangent space to be aligned such that 
+#the x axis corresponds to the u direction in the bump map and
+# the y axis corresponds to the v direction in the bump map. 
+#That is, if Q represents a point inside the triangle,
+# we would like to be able to write
+#Q - P0 = (u - u0)T + (v - v0)B
+
     vcount = len(positions)
     tan1 = numpy.zeros((vcount,3),dtype='float32')
     tan2 = numpy.zeros((vcount,3),dtype='float32')

@@ -6,7 +6,7 @@ from OpenGL.GL.ARB.vertex_program import glVertexAttribPointerARB
 
 import math
 import numpy
-from model import Model_Cubemap_Texture
+from model import Model_Cube_Map
 
 class Cubemap:
     def __init__(self,debug = False):
@@ -14,7 +14,7 @@ class Cubemap:
         self.texture = None
         self.vertex_shader = None
         self.fragment_shader = None
-        self.active_texture = GL_TEXTURE0
+        # self.active_texture = GL_TEXTURE0
         self.cubemap_sampler_name = None
         self.pos_attr_name = None
         self.rot_transf_name = None
@@ -47,7 +47,7 @@ class Cubemap:
             uniform mat4 mvpTransf;
             varying vec3 ex_texcoord;
             void main(void){
-            ex_texcoord = normalize(pos.xyz);
+            ex_texcoord = pos.xyz;
             gl_Position = mvpTransf * pos;}
             """]
             f_shader_source = [\
@@ -94,17 +94,18 @@ class Cubemap:
 
         return True
 
-    def load_textures(self,xp,xn,yp,yn,zp,zn,debug = False):
+    def set_textures(self,xp,xn,yp,yn,zp,zn,debug = False):
         if self.program == None:
             print 'No program defined'
             return False
-        self.texture = Model_Cubemap_Texture()
-        self.texture.set_texture_files(xp,xn,yp,yn,zp,zn)
+        self.texture = Model_Cube_Map()
+        self.texture.set_textures(xp,xn,yp,yn,zp,zn)
 
+    def bindTexture(self,tex):
         glUseProgram(self.program)
-        glActiveTexture(self.active_texture)
-
-        return self.texture.load(debug)
+        loc = glGetUniformLocation(self.program,'cubemap')
+        tex.bind()
+        glUniform1i(loc,0)
 
     def use_program(self):
         glUseProgram(self.program)
@@ -115,16 +116,16 @@ class Cubemap:
             print "Error: No cubemap sampler name defined"
             return False
 
-        glActiveTexture(self.active_texture)
+        # glActiveTexture(self.active_texture)
 
         glBindBuffer(GL_ARRAY_BUFFER,self.cubemap_pos_buf)
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,self.cubemap_elem_buf)
 
-        glBindTexture(GL_TEXTURE_CUBE_MAP,self.texture.location)
+        # glBindTexture(GL_TEXTURE_CUBE_MAP,self.texture.location)
 
-        cubemap_sampler = glGetUniformLocation(self.program,
-                                               self.cubemap_sampler_name)
-        glUniform1i(cubemap_sampler,0)
+        # cubemap_sampler = glGetUniformLocation(self.program,
+        #                                        self.cubemap_sampler_name)
+        # glUniform1i(cubemap_sampler,0)
 
         pos_attr_loc = glGetAttribLocation(self.program,self.pos_attr_name)
         glEnableVertexAttribArray(pos_attr_loc)

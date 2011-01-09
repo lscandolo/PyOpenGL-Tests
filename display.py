@@ -57,9 +57,9 @@ def keyPressed(key,x,y,scene):
 def drawScene(scene):
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
-    drawCubemap(scene)
-
-    glClear(GL_DEPTH_BUFFER_BIT)
+    if scene.cubemap != None:
+        drawCubemap(scene)
+        glClear(GL_DEPTH_BUFFER_BIT)
 
     glUseProgram(scene.active_program)
     for obj in scene.models:
@@ -69,14 +69,15 @@ def drawScene(scene):
 
 def drawCubemap(scene):
     scene.cubemap.use_program()
+    glActiveTexture(GL_TEXTURE0)
+    tex_name = scene.cubemap.texture.name
+    scene.cubemap.bindTexture(scene.textures.samplersCM[tex_name])
     mvpTransf = numpy.array(list(scene.cam.projTransf * scene.cam.rotTransf()),
                             dtype="float32")
     scene.cubemap.draw(mvpTransf)
 
 def drawObject(obj, scene, transf = mat4(1.0)):
     cam = scene.cam
-
-    glEnable( GL_TEXTURE_2D )
 
     if type(obj) == Model_Set:
         new_transf = transf * obj.props.transf()
@@ -95,19 +96,6 @@ def drawObject(obj, scene, transf = mat4(1.0)):
         projection_loc = glGetUniformLocation(scene.active_program,"in_Projection")
         glUniformMatrix4fv(projection_loc, 1, GL_FALSE, proj)
 
-        #Set texture
-        # glActiveTexture(GL_TEXTURE0)
-        # tex_sampler = glGetUniformLocation(scene.active_program,"color_tex")
-        # shin_sampler = glGetUniformLocation(scene.active_program,"shininess_tex")
-        # scene.textures.items()[2][1].bind()
-        # glUniform1i(tex_sampler,0)
-        # glActiveTexture(GL_TEXTURE1)
-        # scene.textures.items()[0][1].bind()
-        # glUniform1i(shin_sampler,1)
-
-        # shin_enab_loc= glGetUniformLocation(scene.active_program,'shininess_enabled')
-        # # glUniform1f(shin_enab_loc, 1, GL_FALSE, ctypes.c_float(0.2))
-        # glUniform1i(shin_enab_loc, 0)
         set3dsMaterial(obj.material,scene)
 
         #Send draw command
@@ -126,7 +114,8 @@ def drawObject(obj, scene, transf = mat4(1.0)):
 
 def set3dsMaterial(material,scene):
     current_texture = 0;
-    textures = scene.textures
+    samplers2d = scene.textures.samplers2d
+    samplersCM = scene.textures.samplersCM
     program = scene.active_program
 
     #Float uniforms
@@ -147,19 +136,22 @@ def set3dsMaterial(material,scene):
         loc = glGetUniformLocation(program,name)
         glUniform4f(loc, val[0],val[1],val[2],val[3])
         
-    #Texture_map uniforms
+    #TextureMap uniforms
     maps = [material.texture1_map,material.texture2_map,
-            material.bump_map,material.specular_map,
-            material.shininess_map,material.self_illum_map,
-            material.self_illum_map,material.reflection_map]
-    names = ['texture1_map','texture2_map','bump_map','specular_map',
-             'shininess_map','self_illum_map','self_illum_map','reflection_map']
+            material.height_map,material.normal_map,
+            material.specular_map,material.shininess_map,
+            material.self_illum_map,material.opacity_map]
+    names = ['texture1_map','texture2_map',
+             'height_map','normal_map',
+             'specular_map','shininess_map',
+             'self_illum_map','opacity_map']
     for val,name in zip(maps,names):
         loc = glGetUniformLocation(program,name + '.set')
         if not val.set:
             glUniform1i(loc, 0)
             continue
-        else: glUniform1i(loc, 1)
+        
+        glUniform1i(loc, 1)
 
         loc = glGetUniformLocation(program,name + '.rotation')
         glUniform1f(loc, val.rotation)
@@ -173,13 +165,39 @@ def set3dsMaterial(material,scene):
         loc = glGetUniformLocation(program,name + '.scale')
         glUniform2f(loc, val.scale[0],val.scale[1])
 
+        # glActiveTexture(GL_TEXTURE0)
         glActiveTexture(GL_TEXTURE0+current_texture)
         loc = glGetUniformLocation(program,name + '.tex')
-        texture = textures[val.name]
+        texture = samplers2d[val.name]
         texture.bind()
         glUniform1i(loc, current_texture)
         current_texture += 1
 
+    #If the shader declares and (possibly) uses a cubemap it MUST be set
+
+    #TextureCubemap uniforms
+    maps = [material.reflection_map]
+    names = ['reflection_map']
+    for val,name in zip(maps,names):
+        loc = glGetUniformLocation(program,name + '.set')
+        sampler_loc = glGetUniformLocation(program,name + '.tex')
+        glActiveTexture(GL_TEXTURE0+current_texture)
+
+        #If a cubemap is declared, any cubemap MUST be set, so we set a default one
+        if not val.set: 
+            glUniform1i(loc, 0)
+            texture = samplersCM['default']
+        else:
+            glUniform1i(loc, 1)
+
+            loc = glGetUniformLocation(program,name + '.rotation')
+            glUniform1f(loc, val.rotation)
+            texture = samplersCM[val.name]
+
+            
+        texture.bind()
+        glUniform1i(sampler_loc, current_texture)
+        current_texture += 1
 
 def initShaders(v_filename, f_filename):
     v_shader = glCreateShader(GL_VERTEX_SHADER)
@@ -232,16 +250,6 @@ def startOpengl():
     glutSwapBuffers()
     return screen_size
 
-def try_cubemap(scene):
-    if not scene.loadCubemapTextures(
-        'textures/cubemap/sky_x_pos.jpg',
-        'textures/cubemap/sky_x_neg.jpg',
-        'textures/cubemap/sky_y_pos.jpg',
-        'textures/cubemap/sky_y_neg.jpg',
-        'textures/cubemap/sky_z_pos.jpg',
-        'textures/cubemap/sky_z_neg.jpg'):
-        exit(-1)
-
 def main():
     screen_size = startOpengl()
     # program = initShaders("minimal.vert", "minimal.frag")
@@ -269,8 +277,9 @@ def main():
     # model_index = scene.load3dsModel('models/toy/sitting toy.3DS')
     # model_index = scene.load3dsModel('models/bike/sidecar2.3ds')
     # model_index = scene.load3dsModel('models/bot/plx.3DS')
-    model_index = scene.loadObjModel('models/teapot.obj')
     # model_index = scene.loadObjModel('models/human/cate_human.obj')
+    model_index = scene.loadObjModel('models/teapot.obj')
+    # model_index = scene.loadObjModel('models/teapot-low_res.obj')
 
     if model_index == None:
         print 'Error loading model'
@@ -282,25 +291,64 @@ def main():
     # model.props.scale = vec3(0.01)
     # model.props.ori = quat(-1.57,vec3(1,0,0))
     model.props.scale = vec3(1)
-    model.props.ori = quat(-1.57,vec3(0,1,0))
+
 
     for m in model.models:
         tm = m.material.texture1_map
-        tm.name = 'textures/masonry-wall-texture.jpg'
-        tm.scale = (10,10)
+        nm = m.material.normal_map
+        hm = m.material.height_map
+
+        # tm.name = 'textures/uvmap.png'
+
+        # tm.name = 'textures/masonry-wall-texture.jpg'
+        # hm.name = 'textures/masonry-wall-bump-map.jpg'
+        # nm.name = 'textures/masonry-wall-normal-map.jpg'
+
+        tm.name = 'textures/brickwork-texture.jpg'
+        hm.name = 'textures/brickwork-bump_map.jpg'
+        nm.name = 'textures/brickwork-normal_map.jpg'
+
+        # tm.name = 'textures/pebbles-texture.jpg'
+        # hm.name = 'textures/pebbles-height_map.jpg'
+        # nm.name = 'textures/pebbles-normal_map.jpg'
+
+        # tm.name = 'textures/masonry-wall-texture.jpg'
+        # bm.name = 'textures/masonry-wall-normal-map.jpg'
+        # tm.name = 'textures/stone_wall.jpg'
+        # bm.name = 'textures/stone_wall_normal_map.jpg'
+
+        sc = 3
+        tm.scale = (sc,sc)
+        hm.scale = (sc,sc)
+        nm.scale = (sc,sc)
+        # tm.scale = (3,3)
+        # hm.scale = (3,3)
+        # nm.scale = (3,3)
+        # tm.scale = (0.5,0.5)
+        # bm.scale = (0.5,0.5)
         tm.set = True
+        hm.set = True
+        nm.set = True
 
-        bm = m.material.bump_map
-        bm.scale = (10,10)
-        bm.name = 'textures/masonry-wall-normal-map.jpg'
-        bm.set = True
+        # rm = m.material.reflection_map
+        # rm.set_textures('textures/cubemap/sky_x_pos.jpg',
+        #                 'textures/cubemap/sky_x_neg.jpg',
+        #                 'textures/cubemap/sky_y_pos.jpg',
+        #                 'textures/cubemap/sky_y_neg.jpg',
+        #                 'textures/cubemap/sky_z_pos.jpg',
+        #                 'textures/cubemap/sky_z_neg.jpg')
+        # rm.set = False
 
-    scene.loadModelsTextures()
+    scene.initCubemap('textures/cubemap/sky_x_pos.jpg',
+                      'textures/cubemap/sky_x_neg.jpg',
+                      'textures/cubemap/sky_y_pos.jpg',
+                      'textures/cubemap/sky_y_neg.jpg',
+                      'textures/cubemap/sky_z_pos.jpg',
+                      'textures/cubemap/sky_z_neg.jpg')
 
+    scene.loadModelTextures()
     scene.cam.pos = vec3(0.,0.,3)
     
-    try_cubemap(scene)
-
     screen = Screen()
     screen.size = screen_size
 

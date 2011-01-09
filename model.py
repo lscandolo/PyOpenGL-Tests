@@ -138,31 +138,38 @@ class Model_Material():
         self.use_wire_abs = 0
         self.wire_size = 0
         self.density = 0
-        self.texture1_map = Model_Material_Texture()
-        self.texture2_map = Model_Material_Texture()
-        self.opacity_map = Model_Material_Texture()
-        self.bump_map = Model_Material_Texture()
-        self.specular_map = Model_Material_Texture()
-        self.shininess_map = Model_Material_Texture()
-        self.self_illum_map = Model_Material_Texture()
-        self.reflection_map = Model_Material_Texture()
+        self.texture1_map = Model_Texture_Map()
+        self.texture2_map = Model_Texture_Map()
+        self.opacity_map = Model_Texture_Map()
+        self.height_map = Model_Texture_Map()
+        self.normal_map = Model_Texture_Map()
+        self.specular_map = Model_Texture_Map()
+        self.shininess_map = Model_Texture_Map()
+        self.self_illum_map = Model_Texture_Map()
+        self.reflection_map = Model_Cube_Map()
         self.bump_size = 1.0
 
-    def texture_names(self):
+    def texture2d_names(self):
         names = []
         for a in [self.texture1_map,self.texture2_map,
-                  self.opacity_map,self.bump_map,
-                  self.specular_map,self.shininess_map,
-                  self.self_illum_map,self.reflection_map]:
+                  self.opacity_map,self.height_map,
+                  self.normal_map,self.specular_map,
+                  self.shininess_map,self.self_illum_map]:
             if a.set:
                 names.append(a.name)
-                
+        return names
+    
+    def textureCM_names(self):
+        names = []
+        for a in [self.reflection_map]:
+            if a.name != None:
+                names.append(a.texture_names())
         return names
 
-class Model_Material_Texture():
+class Model_Texture_Map():
     def __init__(self):
         self.set = False
-        self.name = ''
+        self.name = None
         self.scale = (1,1)
         self.offset = (0,0)
         self.rotation = 0.
@@ -176,6 +183,34 @@ class Model_Material_Texture():
             self.offset = tm.offset
             self.rotation = radians(tm.rotation)
             self.percent = tm.percent
+
+class Model_Cube_Map():
+    def __init__(self):
+        self.set = False
+        self.rotation = 0.
+        self.name = None
+        self.xp = None
+        self.xn = None
+        self.yp = None
+        self.yn = None
+        self.zp = None
+        self.zn = None
+
+    def set_textures(self,xp,xn,yp,yn,zp,zn):
+        self.xp = xp
+        self.xn = xn
+        self.yp = yp
+        self.yn = yn
+        self.zp = zp
+        self.zn = zn
+        self.set = True
+        self.name = xp
+
+    def texture_names(self):
+        return (self.name,
+                self.xp,self.xn,
+                self.yp,self.yn,
+                self.zp,self.zn)
 
 class Model_Texture():
     def __init__(self):
@@ -240,6 +275,7 @@ class Model_Texture():
 class Model_Cubemap_Texture():
     def __init__(self):
         self.location = 0
+        self.name = None
         self.tex_xpos = None
         self.tex_ypos = None
         self.tex_zpos = None
@@ -251,13 +287,6 @@ class Model_Cubemap_Texture():
         self.create_mipmaps = True
 
     def load(self,debug = False):
-        # if self.program == None:
-        #     print "No program defined"
-        #     return False
-        
-        # glUseProgram(self.program)
-        # glActiveTexture(self.active_texture)
-
         self.location = glGenTextures(1)
         glBindTexture(GL_TEXTURE_CUBE_MAP,self.location)
 
@@ -276,30 +305,21 @@ class Model_Cubemap_Texture():
             print 'Error: Cubemap textures not set' 
             return False
         
-        try:
-            Image.open(self.tex_xpos).verify()
-            Image.open(self.tex_ypos).verify()
-            Image.open(self.tex_zpos).verify()
-            Image.open(self.tex_xneg).verify()
-            Image.open(self.tex_yneg).verify()
-            Image.open(self.tex_zneg).verify()
-        except a:
-            print 'Error loading cubemap images', a
-            return False
-
-        xp_img = Image.open(self.tex_xpos).convert('RGB')
-        yp_img = Image.open(self.tex_ypos).convert('RGB')
-        zp_img = Image.open(self.tex_zpos).convert('RGB')
-        xn_img = Image.open(self.tex_xneg).convert('RGB')
-        yn_img = Image.open(self.tex_yneg).convert('RGB')
-        zn_img = Image.open(self.tex_zneg).convert('RGB')
-
-        imgs = [xp_img,xn_img,yp_img,yn_img,zp_img,zn_img]
-        targets =  [GL_TEXTURE_CUBE_MAP_POSITIVE_X,GL_TEXTURE_CUBE_MAP_NEGATIVE_X]
-        targets += [GL_TEXTURE_CUBE_MAP_POSITIVE_Y,GL_TEXTURE_CUBE_MAP_NEGATIVE_Y]
-        targets += [GL_TEXTURE_CUBE_MAP_POSITIVE_Z,GL_TEXTURE_CUBE_MAP_NEGATIVE_Z]
+        files = [self.tex_xpos,self.tex_xneg,self.tex_ypos,
+                 self.tex_yneg,self.tex_zpos,self.tex_zneg]
+        targets =  [GL_TEXTURE_CUBE_MAP_POSITIVE_X,GL_TEXTURE_CUBE_MAP_NEGATIVE_X,
+                    GL_TEXTURE_CUBE_MAP_POSITIVE_Y,GL_TEXTURE_CUBE_MAP_NEGATIVE_Y,
+                    GL_TEXTURE_CUBE_MAP_POSITIVE_Z,GL_TEXTURE_CUBE_MAP_NEGATIVE_Z]
         
-        for img,trg in zip(imgs,targets):
+        for tex_file,trg in zip(files,targets):
+
+            # try:
+            #     Image.open(self.tex_file).verify()
+            # except a:
+            #     print 'Error loading cubemap images', a
+            #     return False
+
+            img = Image.open(tex_file).convert('RGB') 
 
             texdata = img.getdata()
             buf = numpy.array(texdata,dtype='uint8',order='C')
@@ -307,14 +327,33 @@ class Model_Cubemap_Texture():
             data = numpy.reshape(buf,buf_shape,order='C')
             glTexImage2Dub(trg, 0, 3, 0, GL_RGB, data)
 
-            if debug:
-                print "Loaded", trg, "Size:", img.size
+            print 'Loaded cubemap texture [' + tex_file + ']'
 
         if self.create_mipmaps:
             glGenerateMipmap(GL_TEXTURE_CUBE_MAP)
             if debug: print "Generated cubemap mipmaps"
     
         return True
+
+    def load_default(self):
+        self.name = 'default'
+        self.location = glGenTextures(1)
+        glBindTexture(GL_TEXTURE_CUBE_MAP,self.location)
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER,self.mag_filter)
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER,self.min_filter)
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R,GL_CLAMP_TO_EDGE);
+
+        targets =  [GL_TEXTURE_CUBE_MAP_POSITIVE_X,GL_TEXTURE_CUBE_MAP_NEGATIVE_X,
+                    GL_TEXTURE_CUBE_MAP_POSITIVE_Y,GL_TEXTURE_CUBE_MAP_NEGATIVE_Y,
+                    GL_TEXTURE_CUBE_MAP_POSITIVE_Z,GL_TEXTURE_CUBE_MAP_NEGATIVE_Z]
+        for trg in targets:
+            data = numpy.zeros((1,1,3),dtype='uint8',order='C')
+            glTexImage2Dub(trg, 0, 3, 0, GL_RGB, data)
+            
+        print 'Created default cubemap texture'
+        glGenerateMipmap(GL_TEXTURE_CUBE_MAP)
 
     def set_texture_files(self,xp,xn,yp,yn,zp,zn,debug = False):
         self.tex_xpos = xp
@@ -323,6 +362,7 @@ class Model_Cubemap_Texture():
         self.tex_xneg = xn
         self.tex_yneg = yn
         self.tex_zneg = zn
+        self.name = xp
 
     def bind(self):
         glBindTexture(GL_TEXTURE_CUBE_MAP, self.location)
@@ -333,7 +373,7 @@ class Cam:
         self.ori = quat(1,0,0,0)
         self.inclination = 0.
         self.azimuthal = 0.
-        self.projTransf = mat4().perspective(50.,5./4.,0.1,100)
+        self.projTransf = mat4().perspective(50.,5./4.,0.01,100)
 
     def delta(self, az, inc):
         

@@ -56,92 +56,7 @@ mat2 tex_scale(vec2 sc){
 
 vec2 tex_coords(TextureMap map, vec2 coords){
   return tex_scale(map.scale)*tex_rot(map.rotation)*(coords-map.offset);
-  /* return vec2(0.5) +  */
-  /*   tex_scale(map.scale)*tex_rot(map.rotation)*(coords-map.offset-vec2(0.5)); */
 }
-
-vec2 secant(vec2  x0, vec2 x1,
-	    float z0, float z1,
-	    float bias_factor, float height_factor,
-	    sampler2D height, vec3 vdir){
-
-  float iterations = 5;
-
-  vec2 x2;
-  float z2;
-
-  float h0 = texture(height,x0).x;
-  float h1 = texture(height,x1).x;
-  float h2;
-  vec3 hdir;
-
-  float a;
-
-  do {
-    hdir = normalize( vec3(x1.x,x1.y,h1) - vec3(x0.x,x0.y,h0) );
-    a = (h0 - z0) / (vdir.z - hdir.z);
-    x2 = x0 + vdir.xy * a;
-    z2 = z0 + vdir.z  * a;
-    h2 = (texture(height,x2).x - bias_factor) * height_factor;
-
-    x0 = x1;
-    z0 = z1;
-    x1 = x2;
-    z1 = z2;
-    h0 = h1;
-    h1 = h2;
-
-    iterations--;
-  } 
-  while (abs(h2 - z2) > 0.01 && iterations > 0) ;
-
-  return x2;
-}
-
-vec2 bisection(vec3  x0, vec3 x1,
-	       float bias_factor, float height_factor,
-	       sampler2D height, vec3 vdir){
-  vec3 x2;
-  float h0 = texture(height,x0.xy).x;
-  float h1 = texture(height,x1.xy).x;
-  float h2;
-
-  float iterations = 20;
-  
-  do{
-    x2 = x0 + 0.5 * (x1 - x0);
-    h2 = (texture(height,x2.xy).x - bias_factor) * height_factor;
-
-    if (h2 < x2.z){
-      x0 = x2;
-      h0 = h2;
-    }
-    else{
-      x1 = x2;
-      h1 = h2;
-    }
-
-    iterations--;
-  }
-  while (abs(h2 - x2.z) > 0.001 && iterations > 0) ;
-  return x2.xy;
-}
-
-
-/* vec2 tex_coords(Texture3ds map, vec2 coords){ */
-/*   float a = radians(map.rotation); */
-/*   float ca = cos(a); */
-/*   float sa = sin(a); */
-/*   float s0 = coords.s - map.offset.s  - 0.5; */
-/*   /\* float t0 = 0.5 - coords.t - map.offset.t; *\/ */
-/*   float t0 = coords.t - map.offset.t - 0.5; */
-/*   float ss = ca * s0 - sa*t0; */
-/*   float tt = sa * s0 + ca*t0; */
-/*   ss = map.scale.s * ss + 0.5; */
-/*   tt = map.scale.t * tt + 0.5; */
-/*   return vec2(ss,tt); */
-/* } */
-
 
 void main(void)
 {
@@ -203,66 +118,31 @@ void main(void)
 
   vec3 normal = normalize(ex_Normal);
 
-  // Normal Mapping
-  /* if (normal_map.set){ */
-  /*   vec2 coords = tex_coords(normal_map,ex_TexCoord); */
-  /*   vec3 new_normal = texture2D(normal_map.tex,coords).xyz - vec3(0.5); */
-  /*   /\*Transf transforms from tangent space to world space */
-  /*     (its transpose does the opposite)*\/ */
-  /*   mat3 transf = mat3(ex_Tangent,ex_Bitangent,ex_Normal); */
-  /*   new_normal = normalize(transf * new_normal); */
-  /*   normal = new_normal; */
-  /* } */
-
-  // Relief mapping
+  // Parallax mapping 
   if (height_map.set){
-    float height_factor = 0.05;
-    float bias_factor = 1.0;
+    float height_factor = 0.02;
+    float bias_factor = 0.5;
+    float h;
 
       /*Transf transforms from world space to tangent space
   	(its transpose does the opposite)*/
     mat3 transf = transpose(mat3(ex_Tangent,ex_Bitangent,ex_Normal));
 
-    vec3 v = normalize(transf * normalize(ex_Position));
+    vec3 v = normalize(transf * (normalize(-ex_Position)));
+    vec2 p;
+    vec2 pn =  tex_coords(height_map,ex_TexCoord);
 
-
-    vec2 p = tex_coords(height_map,ex_TexCoord);;
-    vec2 pn = p;
-
-    int iterations = 32;
-
-    /* iterations = int(clamp(-5.0/v.z,32.0,5.0)); */
-    
-    float step_size = (height_factor / -v.z) /  float(iterations);
-
-    vec3 vstep = v * step_size;
-    vec3 vtest = vec3(0.0);
-
-    float h = texture2D(height_map.tex,pn).x;
-    h = (h - bias_factor) * height_factor;
-
-    while (vtest.z > h){
-      
-      vtest += vstep;
-      pn = p + vtest.xy;
-      h = texture2D(height_map.tex,pn).x;
+    //We iterate to get higher accuracy
+    for (int i = 0; i < 3; i++){
+      p = pn;
+      h = texture2D(height_map.tex,p).x;
       h = (h - bias_factor) * height_factor;
+      pn = p + (h * v.xy)/* /v.z */;
     }
-
-    /* pn = secant(pn-vstep.xy, pn, */
-    /* 		(vtest-vstep).z, vtest.z, */
-    /* 		bias_factor,height_factor, */
-    /* 		height_map.tex,v); */
-    pn = bisection(vec3(pn-vstep.xy,(vtest-vstep).z),vec3(pn,vtest.z),
-		   bias_factor,height_factor,
-		   height_map.tex,v);
-		   
-
 
     if (texture1_map.set){
       vec2 coords = pn;
       ambient = texture2D(texture1_map.tex,coords).xyz * texture1_map.percent;
-      if (iterations <= 0) ambient = vec3(1,1,0);
       diffuse = ambient;
     }
 
@@ -280,9 +160,6 @@ void main(void)
     ambient = texture(reflection_map.tex,ref).xyz;
     diffuse = ambient;
   }
-
-  /* mat3 Modelview_trans = inverse(transpose(mat3(in_Modelview))); */
-  /* vec3 light_source = normalize(Modelview_trans *  vec3(0.707,0.707,0.707)); */
 
   vec3 light_source = normalize((in_Modelview *  vec4(0.707,0.707,0.707,0.0)).xyz);
 

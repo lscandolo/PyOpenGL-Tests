@@ -18,13 +18,24 @@ smooth out vec3 ex_Bitangent;
 
 void main(void)
 {
-  
+  /*This is not necesary since in_Modelview is a pure rototranslation
+    and so the transpose of the inverse (of its upper left mat3) is itself*/
+  /* mat3 Modelview_trans = inverse(transpose(mat3(in_Modelview))); */
+  /* ex_Normal     = Modelview_trans * in_Normal; */
+  /* ex_Tangent    = Modelview_trans * in_Tangent.xyz; */
+  /* ex_Bitangent  = cross(in_Normal,in_Tangent.xyz); */
+  /* ex_Bitangent  = Modelview_trans * ex_Bitangent; */
+
   ex_Normal     = (in_Modelview * vec4(in_Normal,0.0)).xyz;
-  ex_Position   = (in_Modelview * vec4(in_Position,1.0)).xyz;
   ex_Tangent    = (in_Modelview * vec4(in_Tangent.xyz,0.0)).xyz;
   ex_Bitangent  = cross(in_Normal,in_Tangent.xyz);
-  ex_Bitangent  = (in_Modelview * vec4(ex_Bitangent,1.0)).xyz;
+  ex_Bitangent  = (in_Modelview * vec4(ex_Bitangent,0.0)).xyz;
+
   ex_Bitangent  = normalize(ex_Bitangent) * in_Tangent.w;
+  ex_Position   = (in_Modelview * vec4(in_Position,1.0)).xyz;
   ex_TexCoord   = in_TexCoord;
   gl_Position = in_Projection * in_Modelview * vec4(in_Position, 1.0);
+
+
+
 }

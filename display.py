@@ -15,6 +15,8 @@ import cgkit
 from cgkit.all import quat, mat4, vec3
 from model import Model_Texture, Model_Set, Model_Object
 
+frames = 0
+
 def vbo_offset(offset):
     return ctypes.c_void_p(offset * 4)
 
@@ -54,7 +56,19 @@ def keyPressed(key,x,y,scene):
         for i in range(0,3):
             cam.pos[i] += delta * delta_pos[i]
 
+    if key == 'z':
+        model = scene.models[0]
+        for m in model.models:
+            m.material.bump_height += 0.005
+    if key == 'x':
+        model = scene.models[0]
+        for m in model.models:
+            m.material.bump_height -= 0.005
+
+
 def drawScene(scene):
+    global frames
+
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
     if scene.cubemap != None:
@@ -66,6 +80,14 @@ def drawScene(scene):
         drawObject(obj,scene)
 
     glutSwapBuffers()
+
+    frames += 1
+    time = glutGet(GLUT_ELAPSED_TIME)/1000
+    if time > scene.time + 1:
+        print 'FPS:', frames
+        frames = 0
+        scene.time = time
+        
 
 def drawCubemap(scene):
     scene.cubemap.use_program()
@@ -96,7 +118,7 @@ def drawObject(obj, scene, transf = mat4(1.0)):
         projection_loc = glGetUniformLocation(scene.active_program,"in_Projection")
         glUniformMatrix4fv(projection_loc, 1, GL_FALSE, proj)
 
-        set3dsMaterial(obj.material,scene)
+        setupMaterial(obj.material,scene)
 
         #Send draw command
         if obj.set_buffers(scene.active_program):
@@ -112,7 +134,7 @@ def drawObject(obj, scene, transf = mat4(1.0)):
     else:
         return
 
-def set3dsMaterial(material,scene):
+def setupMaterial(material,scene):
     current_texture = 0;
     samplers2d = scene.textures.samplers2d
     samplersCM = scene.textures.samplersCM
@@ -257,12 +279,15 @@ def startOpengl():
 
 def main():
     screen_size = startOpengl()
-    program = initShaders("3ds.vert", "3ds.frag")
+    # program = initShaders("shaders/3ds.vert", "shaders/3ds.frag")
+    # program = initShaders("shaders/parallax.vert", "shaders/parallax.frag")
+    program = initShaders("shaders/relief.vert", "shaders/relief.frag")
 
     scene = Scene()
     scene.active_program = program
 
-    model_index = scene.loadObjModel('models/teapot.obj')
+    model_index = scene.loadObjModel('models/floor.obj')
+    # model_index = scene.loadObjModel('models/teapot.obj')
 
     if model_index == None:
         print 'Error loading model'
@@ -270,7 +295,7 @@ def main():
 
     model = scene.models[model_index]
 
-    model.props.pos = vec3(0,0,0)
+    model.props.pos = vec3(0,-0.5,3)
     model.props.scale = vec3(1)
 
     for m in model.models:
@@ -283,10 +308,14 @@ def main():
         # tm.name = 'textures/uvmap.png'
 
         tm.name = 'textures/brickwork-texture.jpg'
-        hm.name = 'textures/brickwork-bump_map.jpg'
+        hm.name = 'textures/brickwork-height_map.jpg'
         nm.name = 'textures/brickwork-normal_map.jpg'
 
-        sc = 3
+        # tm.name = 'textures/masonry_wall-texture.jpg'
+        # hm.name = 'textures/masonry_wall-height_map.jpg'
+        # nm.name = 'textures/masonry_wall-normal_map.jpg'
+
+        sc = 1
         tm.scale = (sc,sc)
         hm.scale = (sc,sc)
         nm.scale = (sc,sc)

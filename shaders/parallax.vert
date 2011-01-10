@@ -30,13 +30,16 @@ void main(void)
   ex_Position   = (in_Modelview * vec4(in_Position,1.0)).xyz;
   ex_TexCoord   = in_TexCoord;
 
+  gl_Position = in_Projection * in_Modelview * vec4(in_Position, 1.0);
 
   /*Transf transforms from world space to tangent space
     (its transpose does the opposite)*/
   mat3 tbnTransf = transpose(mat3(ex_Tangent,ex_Bitangent,ex_Normal));
-  tbnView = normalize(tbnTransf * ex_Position);
+  tbnView = tbnTransf * ex_Position;
 
-  gl_Position = in_Projection * in_Modelview * vec4(in_Position, 1.0);
+  /* We cannot normalize the tbnView vector here because it is in tangent space
+   so the perspective correction that would be applied would not be correct*/
+
 
 
 

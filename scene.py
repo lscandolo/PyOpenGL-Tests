@@ -9,6 +9,7 @@ class Scene(object):
         self.cam = Cam()
         self.cubemap = None
         self.active_program = None
+        self.time = 0.
         
 
     def load3dsModel(self,filename):

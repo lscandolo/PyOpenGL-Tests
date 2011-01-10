@@ -11,6 +11,7 @@ smooth in vec3 ex_Tangent;
 smooth in vec3 ex_Bitangent;
 
 smooth in vec3 tbnView;
+smooth in vec2 parallax;
 
 struct TextureMap{
   bool      set;
@@ -25,6 +26,7 @@ struct TextureCubemap{
   bool        set;
   samplerCube tex;
   float       rotation;
+  float       percent;
 };
 
 uniform TextureMap texture1_map;
@@ -58,11 +60,13 @@ mat2 tex_scale(vec2 sc){
 
 vec2 tex_coords(TextureMap map, vec2 coords){
   return tex_scale(map.scale)*tex_rot(map.rotation)*(coords-map.offset);
+  /* return vec2(0.5) +  */
+  /*   tex_scale(map.scale)*tex_rot(map.rotation)*(coords-map.offset-vec2(0.5)); */
 }
+
 
 void main(void)
 {
-
   vec3  ambient;
   vec3  diffuse;
   vec3  specular;
@@ -89,21 +93,22 @@ void main(void)
 
   if (specular_map.set){
     vec2 coords = tex_coords(specular_map,ex_TexCoord);
-    specular = texture2D(specular_map.tex,coords).xyz * specular_map.percent;
+    specular = texture2D(specular_map.tex,coords).xyz;
   }
   else
     specular = mat_specular.xyz;
 
   if (shininess_map.set){
     vec2 coords = tex_coords(shininess_map,ex_TexCoord);
-    shininess = texture2D(shininess_map.tex,coords).r * shininess_map.percent;
+    shininess = texture2D(shininess_map.tex,coords).r;
+    shininess = clamp(shininess - 0.1,0,1);
   }
   else
     shininess = mat_shininess;
 
   if (self_illum_map.set){
     vec2 coords = tex_coords(self_illum_map,ex_TexCoord);
-    self_illum = texture2D(self_illum_map.tex,coords).r * self_illum_map.percent;
+    self_illum = texture2D(self_illum_map.tex,coords).r;
   }
   else
     self_illum = 0;
@@ -112,38 +117,72 @@ void main(void)
 
   if (opacity_map.set){
     vec2 coords = tex_coords(opacity_map,ex_TexCoord);
-    transparency = 1.0 - texture2D(opacity_map.tex,coords).r * opacity_map.percent;
+    transparency = 1.0 - texture2D(opacity_map.tex,coords).r;
   }
   else
     transparency = mat_transparency;
 
   vec3 normal = normalize(ex_Normal);
 
-  // Parallax mapping 
+  // Relief mapping
   if (height_map.set){
 
     float height_factor = mat_bump_height;
-    float bias_factor = mat_bump_bias;
-    float h;
 
-    int iterations = 3;
-    vec2 pllxOffset = -tbnView.xy;
-    vec2 tex_coords =  tex_coords(height_map,ex_TexCoord);
+    const int linear_iterations = 10;
+    const int binary_iterations = 3;
 
-    //We iterate to get higher accuracy
-    for (; iterations > 0; iterations--){
-      h = texture2D(height_map.tex,tex_coords.xy).x;
-      h = (h - bias_factor) * height_factor;
-      tex_coords += (h * pllxOffset)/* /pllxOffset.z */;
+    const float maxheight = 1.0;
+
+    /* Texture vector corresponding plus height info*/
+    vec3 tex_coords = vec3(tex_coords(height_map,ex_TexCoord),maxheight);
+
+    /* Normalized tangent space view vector */
+    vec3 tbnViewN = normalize(tbnView);
+
+    /* Parallax step direction to traverse the heightmap */
+    /* tbnViewN / tbnView.z gives a vector where z comp. is 1, so the xy 
+       component is the parallax displacement if the heigh of the heightmap at 
+       the required point is lowest*/
+    /* Then we divide it by the iterations we are going to do*/
+    /* The height factor is then multiplied to the xy component 
+      It scales the parallax displacement (effectively doing the 
+     same as if the height of the heightmap where multiplied)*/
+    vec3 pllxStep = (tbnViewN / -tbnViewN.z) / float(linear_iterations);
+
+    pllxStep.xy *= height_factor;
+
+    /* Depth bias to fix antialiasing in steep eye dirs */
+    float db = 1.0 + tbnViewN.z;
+    db*=db;
+    db=1.0-db*db;
+    pllxStep.xy *= db;
+
+    float h = texture2D(height_map.tex,tex_coords.xy).x * maxheight;
+
+    for (int i = 0; i < linear_iterations; i++){
+
+      tex_coords += pllxStep;
+      h = texture2D(height_map.tex,tex_coords.xy).x * maxheight;
+
+      if (tex_coords.z < h) break;
+    }
+
+    for (int i = 0; i < binary_iterations; i++){
+      pllxStep *= 0.5;
+      h = texture2D(height_map.tex,tex_coords.xy).x * maxheight;
+      if (tex_coords.z < h) tex_coords -= pllxStep;
+      else            tex_coords       += pllxStep;
     }
 
     if (texture1_map.set){
-      ambient = texture2D(texture1_map.tex,tex_coords).xyz * texture1_map.percent;
+      ambient = texture2D(texture1_map.tex,tex_coords.xy).xyz 
+	* texture1_map.percent;
       diffuse = ambient;
     }
 
     if (normal_map.set){
-      normal =  texture2D(normal_map.tex,tex_coords.xy).xyz - vec3(0.5);
+      normal =  texture2D(normal_map.tex,tex_coords.xy).xyz - vec3(0.5,0.5,0.5);
       normal = mat3(ex_Tangent,ex_Bitangent,ex_Normal) * normal;
       normal = normalize(normal);
     }
@@ -152,17 +191,17 @@ void main(void)
   if (reflection_map.set){
     mat3 transf = transpose(mat3(in_Modelview));
     vec3 ref = reflect(transf*ex_Position,transf*normal);
-    ambient = texture(reflection_map.tex,ref).xyz;
+    ambient += texture(reflection_map.tex,ref).xyz * reflection_map.percent;
     diffuse = ambient;
   }
 
-  vec3 light_source = normalize((in_Modelview *  vec4(0.707,0.707,0.707,0.0)).xyz);
+  vec3 light_source = normalize((in_Modelview *  vec4(0,1,0,0.0)).xyz);
 
   float ambient_strength;
   float diffuse_strength;
 
   ambient_strength = 0.2;
-  diffuse_strength = 0.7;
+  diffuse_strength = 0.6;
 
   float diffuse_val = dot(normal, light_source);
   diffuse_val = clamp(diffuse_val,0,1);
@@ -177,9 +216,9 @@ void main(void)
   vec3 color;
   color = ambient * (ambient_strength + self_illum);
   color += diffuse * diffuse_val * diffuse_strength;
-  color += specular * specular_val /* * shininess */;
+  color += specular * specular_val * shininess;
 
-  gl_FragColor = vec4(color,1.0);
+  gl_FragColor = vec4(color,transparency);
   gl_FragDepth = gl_FragCoord.z;
 
 

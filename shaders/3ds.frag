@@ -11,6 +11,7 @@ smooth in vec3 ex_Tangent;
 smooth in vec3 ex_Bitangent;
 
 smooth in vec3 tbnView;
+smooth in vec2 parallax;
 
 struct TextureMap{
   bool      set;
@@ -123,13 +124,13 @@ void main(void)
 
   vec3 normal = normalize(ex_Normal);
 
-  // Relief mapping
+  // Parallax Occlusion Mapping
   if (height_map.set){
 
     float height_factor = mat_bump_height;
 
     const int linear_iterations = 15;
-    const int binary_iterations = 5;
+    const int binary_iterations = 6;
 
     /* Texture vector corresponding plus height info*/
     vec3 tex_coords = vec3(tex_coords(height_map,ex_TexCoord),0);
@@ -143,6 +144,8 @@ void main(void)
     db*=db;
     db=1.0-db*db;
     pllxStep.xy *= db;
+
+    pllxStep.xy = parallax;
 
     float h = (texture2D(height_map.tex,tex_coords.xy).x - 1) * height_factor;
 
@@ -158,7 +161,7 @@ void main(void)
       pllxStep *= 0.5;
       h = (texture2D(height_map.tex,tex_coords.xy).x - 1) * height_factor;
       if (tex_coords.z < h) tex_coords -= pllxStep;
-      else            tex_coords       += pllxStep;
+      else            tex_coords += pllxStep;
     }
 
     if (texture1_map.set){

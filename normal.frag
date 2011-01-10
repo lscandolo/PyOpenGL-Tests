@@ -44,7 +44,8 @@ uniform float mat_shininess_strength;
 uniform float mat_transparency;
 uniform bool  mat_self_illum;
 uniform float mat_self_ilpct;
-uniform float mat_bump_size;
+uniform float mat_bump_height;
+uniform float mat_bump_bias;
 
 mat2 tex_rot(float r){
   return mat2(cos(r),sin(r),-sin(r),cos(r));
@@ -70,7 +71,6 @@ void main(void)
   float transparency;
   float self_illum;
   float self_ilpct;
-  float bump_size = mat_bump_size;
 
   if (texture1_map.set){
     vec2 coords = tex_coords(texture1_map,ex_TexCoord);

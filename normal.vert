@@ -16,26 +16,16 @@ smooth out vec2 ex_TexCoord;
 smooth out vec3 ex_Tangent;
 smooth out vec3 ex_Bitangent;
 
-smooth out vec3 tbnView;
-
 void main(void)
 {
   ex_Normal     = (in_Modelview * vec4(in_Normal,0.0)).xyz;
   ex_Tangent    = (in_Modelview * vec4(in_Tangent.xyz,0.0)).xyz;
-
   ex_Bitangent  = cross(in_Normal,in_Tangent.xyz);
   ex_Bitangent  = (in_Modelview * vec4(ex_Bitangent,0.0)).xyz;
-  ex_Bitangent  = normalize(ex_Bitangent) * in_Tangent.w;
 
+  ex_Bitangent  = normalize(ex_Bitangent) * in_Tangent.w;
   ex_Position   = (in_Modelview * vec4(in_Position,1.0)).xyz;
   ex_TexCoord   = in_TexCoord;
-
-
-  /*Transf transforms from world space to tangent space
-    (its transpose does the opposite)*/
-  mat3 tbnTransf = transpose(mat3(ex_Tangent,ex_Bitangent,ex_Normal));
-  tbnView = normalize(tbnTransf * ex_Position);
-
   gl_Position = in_Projection * in_Modelview * vec4(in_Position, 1.0);
 
 

@@ -147,7 +147,8 @@ class Model_Material():
         self.shininess_map = Model_Texture_Map()
         self.self_illum_map = Model_Texture_Map()
         self.reflection_map = Model_Cube_Map()
-        self.bump_size = 1.0
+        self.bump_height = 0.02
+        self.bump_bias = 0.5
 
     def texture2d_names(self):
         names = []
@@ -188,6 +189,7 @@ class Model_Cube_Map():
     def __init__(self):
         self.set = False
         self.rotation = 0.
+        self.percent = 1.
         self.name = None
         self.xp = None
         self.xn = None
@@ -216,13 +218,12 @@ class Model_Texture():
     def __init__(self):
         self.location = 0
         self.tex_file = None
-        self.mag_filter = GL_LINEAR
-        self.min_filter = GL_LINEAR_MIPMAP_LINEAR
         self.create_mipmap = True
         self.mag_filter = GL_LINEAR
         self.min_filter = GL_LINEAR_MIPMAP_LINEAR
         self.wrap_s = GL_REPEAT
         self.wrap_t = GL_REPEAT
+        self.max_anisotropy = glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT)
 
     def set_texture_file(self,f,debug = False):
         self.tex_file = f
@@ -239,6 +240,8 @@ class Model_Texture():
         glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T,self.wrap_t)
         glTexParameteri( GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,self.mag_filter)
         glTexParameteri( GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,self.min_filter)
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT,
+                        self.max_anisotropy)
 
         try:
             im = ImageOps.flip(Image.open(self.tex_file).convert('RGB'))
@@ -284,6 +287,7 @@ class Model_Cubemap_Texture():
         self.tex_zneg = None
         self.mag_filter = GL_LINEAR
         self.min_filter = GL_LINEAR_MIPMAP_LINEAR
+        self.max_anisotropy = glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT)
         self.create_mipmaps = True
 
     def load(self,debug = False):
@@ -295,6 +299,9 @@ class Model_Cubemap_Texture():
         glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R,GL_CLAMP_TO_EDGE);
+        glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAX_ANISOTROPY_EXT,
+                        self.max_anisotropy)
+
 
         if self.tex_xpos == None or \
            self.tex_ypos == None or \

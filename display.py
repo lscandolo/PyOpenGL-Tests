@@ -121,10 +121,12 @@ def set3dsMaterial(material,scene):
     #Float uniforms
     vals  = [material.shininess,material.shin_strength,
              material.transparency,material.self_illum,
-             material.self_ilpct,material.bump_size]
+             material.self_ilpct,material.bump_height,
+             material.bump_bias]
     names = ['mat_shininess','mat_shin_strength',
              'mat_transparency','mat_self_illum',
-             'mat_self_ilpct','mat_bump_size']
+             'mat_self_ilpct','mat_bump_height',
+             'mat_bump_bias']
     for val,name in zip(vals,names):
         loc = glGetUniformLocation(program,name)
         glUniform1f(loc, val)
@@ -192,6 +194,9 @@ def set3dsMaterial(material,scene):
 
             loc = glGetUniformLocation(program,name + '.rotation')
             glUniform1f(loc, val.rotation)
+            loc = glGetUniformLocation(program,name + '.percent')
+            glUniform1f(loc, val.percent)
+
             texture = samplersCM[val.name]
 
             
@@ -230,7 +235,6 @@ def initShaders(v_filename, f_filename):
     return program
 
 def startOpengl():
-    # global screen_size
     glutInit(sys.argv)
     # glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH | GLUT_MULTISAMPLE)
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH )
@@ -246,40 +250,19 @@ def startOpengl():
     glEnable(GL_DEPTH_TEST)
     glEnable(GL_TEXTURE_2D)
     glEnable(GL_TEXTURE_CUBE_MAP)
+
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
     glutSwapBuffers()
     return screen_size
 
 def main():
     screen_size = startOpengl()
-    # program = initShaders("minimal.vert", "minimal.frag")
     program = initShaders("3ds.vert", "3ds.frag")
-
-    # model = scene.loadObjModel('models/teapot.obj')
-    # model = scene.loadObjModel('models/human/cate_human.obj')
-    # model = scene.load3dsModel('models/bunny.3ds')
-    # model = scene.load3dsModel('models/human/cate_human.3DS')
-    # model = scene.load3dsModel('models/gib/gib.3DS')
-    # model = scene.load3dsModel('models/theodora/theodora.3DS')
-    # model = scene.load3dsModel('models/irongirl/irongirl_mesh.3DS')
 
     scene = Scene()
     scene.active_program = program
 
-    # model_index = scene.load3dsModel('models/irongirl/irongirl_mesh.3DS')
-    # model_index = scene.load3dsModel('models/human/cate_human.3DS')
-    # model_index = scene.load3dsModel('models/gib/gib.3DS')
-    # model_index = scene.load3dsModel('models/quarian/cate_quarian.3DS')
-    # model_index = scene.load3dsModel('models/girl/girlnpc.3DS')
-    # model_index = scene.load3dsModel('models/bmw/bmw.3DS')
-    # model_index = scene.load3dsModel('models/bus/Busall.3ds')
-    # model_index = scene.load3dsModel('models/toy/stand toy.3DS')
-    # model_index = scene.load3dsModel('models/toy/sitting toy.3DS')
-    # model_index = scene.load3dsModel('models/bike/sidecar2.3ds')
-    # model_index = scene.load3dsModel('models/bot/plx.3DS')
-    # model_index = scene.loadObjModel('models/human/cate_human.obj')
     model_index = scene.loadObjModel('models/teapot.obj')
-    # model_index = scene.loadObjModel('models/teapot-low_res.obj')
 
     if model_index == None:
         print 'Error loading model'
@@ -288,47 +271,33 @@ def main():
     model = scene.models[model_index]
 
     model.props.pos = vec3(0,0,0)
-    # model.props.scale = vec3(0.01)
-    # model.props.ori = quat(-1.57,vec3(1,0,0))
     model.props.scale = vec3(1)
 
-
     for m in model.models:
+        m.material.bump_height = 0.02
+
         tm = m.material.texture1_map
         nm = m.material.normal_map
         hm = m.material.height_map
 
         # tm.name = 'textures/uvmap.png'
 
-        # tm.name = 'textures/masonry-wall-texture.jpg'
-        # hm.name = 'textures/masonry-wall-bump-map.jpg'
-        # nm.name = 'textures/masonry-wall-normal-map.jpg'
-
         tm.name = 'textures/brickwork-texture.jpg'
         hm.name = 'textures/brickwork-bump_map.jpg'
         nm.name = 'textures/brickwork-normal_map.jpg'
-
-        # tm.name = 'textures/pebbles-texture.jpg'
-        # hm.name = 'textures/pebbles-height_map.jpg'
-        # nm.name = 'textures/pebbles-normal_map.jpg'
-
-        # tm.name = 'textures/masonry-wall-texture.jpg'
-        # bm.name = 'textures/masonry-wall-normal-map.jpg'
-        # tm.name = 'textures/stone_wall.jpg'
-        # bm.name = 'textures/stone_wall_normal_map.jpg'
 
         sc = 3
         tm.scale = (sc,sc)
         hm.scale = (sc,sc)
         nm.scale = (sc,sc)
-        # tm.scale = (3,3)
-        # hm.scale = (3,3)
-        # nm.scale = (3,3)
-        # tm.scale = (0.5,0.5)
-        # bm.scale = (0.5,0.5)
         tm.set = True
         hm.set = True
         nm.set = True
+
+        # sm = m.material.shininess_map
+        # sm.name = 'textures/brickwork-bump_map.jpg'
+        # sm.scale = (sc,sc)
+        # sm.set = True
 
         # rm = m.material.reflection_map
         # rm.set_textures('textures/cubemap/sky_x_pos.jpg',
@@ -337,7 +306,7 @@ def main():
         #                 'textures/cubemap/sky_y_neg.jpg',
         #                 'textures/cubemap/sky_z_pos.jpg',
         #                 'textures/cubemap/sky_z_neg.jpg')
-        # rm.set = False
+        # rm.set = True
 
     scene.initCubemap('textures/cubemap/sky_x_pos.jpg',
                       'textures/cubemap/sky_x_neg.jpg',

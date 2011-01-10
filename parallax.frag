@@ -10,6 +10,7 @@ smooth in vec3 ex_Position;
 smooth in vec3 ex_Tangent;
 smooth in vec3 ex_Bitangent;
 
+smooth in vec3 tbnView;
 
 struct TextureMap{
   bool      set;
@@ -44,7 +45,8 @@ uniform float mat_shininess_strength;
 uniform float mat_transparency;
 uniform bool  mat_self_illum;
 uniform float mat_self_ilpct;
-uniform float mat_bump_size;
+uniform float mat_bump_height;
+uniform float mat_bump_bias;
 
 mat2 tex_rot(float r){
   return mat2(cos(r),sin(r),-sin(r),cos(r));
@@ -70,7 +72,6 @@ void main(void)
   float transparency;
   float self_illum;
   float self_ilpct;
-  float bump_size = mat_bump_size;
 
   if (texture1_map.set){
     vec2 coords = tex_coords(texture1_map,ex_TexCoord);
@@ -120,37 +121,31 @@ void main(void)
 
   // Parallax mapping 
   if (height_map.set){
-    float height_factor = 0.02;
-    float bias_factor = 0.5;
+
+    float height_factor = mat_bump_height;
+    float bias_factor = mat_bump_bias;
     float h;
 
-      /*Transf transforms from world space to tangent space
-  	(its transpose does the opposite)*/
-    mat3 transf = transpose(mat3(ex_Tangent,ex_Bitangent,ex_Normal));
-
-    vec3 v = normalize(transf * (normalize(-ex_Position)));
-    vec2 p;
-    vec2 pn =  tex_coords(height_map,ex_TexCoord);
+    int iterations = 3;
+    vec2 pllxOffset = -tbnView.xy;
+    vec2 tex_coords =  tex_coords(height_map,ex_TexCoord);
 
     //We iterate to get higher accuracy
-    for (int i = 0; i < 3; i++){
-      p = pn;
-      h = texture2D(height_map.tex,p).x;
+    for (; iterations > 0; iterations--){
+      h = texture2D(height_map.tex,tex_coords.xy).x;
       h = (h - bias_factor) * height_factor;
-      pn = p + (h * v.xy)/* /v.z */;
+      tex_coords += (h * pllxOffset)/* /pllxOffset.z */;
     }
 
     if (texture1_map.set){
-      vec2 coords = pn;
-      ambient = texture2D(texture1_map.tex,coords).xyz * texture1_map.percent;
+      ambient = texture2D(texture1_map.tex,tex_coords).xyz * texture1_map.percent;
       diffuse = ambient;
     }
 
     if (normal_map.set){
-      vec2 coords = pn;
-      vec3 new_normal =  texture2D(normal_map.tex,coords).xyz - vec3(0.5);
-      new_normal = normalize(transpose(transf) * new_normal);
-      normal = new_normal;
+      normal =  texture2D(normal_map.tex,tex_coords.xy).xyz - vec3(0.5);
+      normal = mat3(ex_Tangent,ex_Bitangent,ex_Normal) * normal;
+      normal = normalize(normal);
     }
   }
 

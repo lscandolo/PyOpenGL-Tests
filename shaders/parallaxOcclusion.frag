@@ -122,7 +122,6 @@ vec3 reflected_light(vec3 f_col, vec3 f_pos, vec3 f_nor, float shininess){
     specular_strength *= shininess;
     final_color += specular_strength * l_col;
 
-
     final_color *= ang_dim*dist_dim*spot_light[i].intensity;
   }
 
@@ -243,6 +242,8 @@ void main(void)
 
   vec3 ambient_color = ambient_light.intensity * normalize(ambient_light.color);
   ambient_color *= ambient;
+
+
 
   vec3 color = spot_color + ambient_color;
 

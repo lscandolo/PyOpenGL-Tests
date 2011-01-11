@@ -9,7 +9,7 @@ import numpy
 from model import Model_Cube_Map
 
 class Cubemap:
-    def __init__(self,debug = False):
+    def __init__(self,debug = False,clockwise = True):
         self.program = None
         self.texture = None
         self.vertex_shader = None
@@ -23,7 +23,7 @@ class Cubemap:
         glBindBuffer(GL_ARRAY_BUFFER,self.cubemap_pos_buf)
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,self.cubemap_elem_buf)
         
-        cubemap_pos = numpy.array(cubemapVals(20),dtype='float32')
+        cubemap_pos = numpy.array(cubemapVals(20,clockwise),dtype='float32')
         cubemap_elems = numpy.array(range(0,36),dtype='int32')
 
         #Yes, yes, this is not optimal, but I'm not going to sacrifice 
@@ -98,7 +98,7 @@ class Cubemap:
         if self.program == None:
             print 'No program defined'
             return False
-        self.texture = Model_Cube_Map()
+        self.texture = Model_Cube_Map('cubemap')
         self.texture.set_textures(xp,xn,yp,yn,zp,zn)
 
     def bindTexture(self,tex):
@@ -144,7 +144,7 @@ class Cubemap:
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,0)
 
 
-def cubemapVals(radius):
+def cubemapVals(radius, clockwise = True):
 
     a = math.sqrt(3 * (radius**2))
         
@@ -152,21 +152,27 @@ def cubemapVals(radius):
     pos =  [(-a,a,a),(a,a,a),(-a,-a,a)]
     pos += [(-a,-a,a),(a,a,a),(a,-a,a)]
     #ZNEG
-    pos += [(-a,a,-a),(a,a,-a),(-a,-a,-a)]
-    pos += [(-a,-a,-a),(a,a,-a),(a,-a,-a)]
+    pos += [(a,a,-a),(-a,a,-a),(-a,-a,-a)]
+    pos += [(a,a,-a),(-a,-a,-a),(a,-a,-a)]
     #XNEG
     pos += [(-a,a,-a),(-a,a,a),(-a,-a,-a)]
     pos += [(-a,-a,-a),(-a,a,a),(-a,-a,a)]
     #XPOS
-    pos += [(a,a,-a),(a,a,a),(a,-a,-a)]
-    pos += [(a,-a,-a),(a,a,a),(a,-a,a)]
+    pos += [(a,a,a),(a,a,-a),(a,-a,-a)]
+    pos += [(a,a,a),(a,-a,-a),(a,-a,a)]
     #YPOS
     pos += [(-a,a,a),(-a,a,-a),(a,a,a)]
     pos += [(a,a,a),(-a,a,-a),(a,a,-a)]
     #YNEG
-    pos += [(-a,-a,a),(-a,-a,-a),(a,-a,a)]
-    pos += [(a,-a,a),(-a,-a,-a),(a,-a,-a)]
-    
+    pos += [(-a,-a,-a),(-a,-a,a),(a,-a,a)]
+    pos += [(-a,-a,-a),(a,-a,a),(a,-a,-a)]
+
+    if not clockwise:
+        for i in range(0,36,3):
+            vn = pos[i]
+            pos[i] = pos[i+1]
+            pos[i+1] = vn
+
     return pos
 
 def vbo_offset(offset):

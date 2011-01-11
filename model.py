@@ -8,6 +8,8 @@ import Image
 import ImageOps
 from cgkit.sl import radians
 
+from light import *
+
 numpy = __import__("numpy")
 import cgkit
 from cgkit.all import *
@@ -51,24 +53,13 @@ class Model_Object(Model):
         for attribute in attributes:
             attribute.delete()
 
-    def set_buffers(self, program):
-        if len(self.attributes) == 0:
-            print "Error: No info setup in model [" + self.name + "] before calling set_buffers"
-            return False
+    def setup(self,program):
         for (name,attr) in self.attributes.items():
-            location = glGetAttribLocation(program, name)
-            if location != -1:
-                glBindBuffer(GL_ARRAY_BUFFER,attr.buffer)
-                glEnableVertexAttribArray(location)
-                glVertexAttribPointerARB(location,attr.elem_len,GL_FLOAT,GL_FALSE,0,vbo_offset(0))
-        glBindBuffer(GL_ARRAY_BUFFER,0)
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,self.elements.buffer)
-        return True
+            attr.setup(program,name)
+        self.elements.setup()
 
 class Model_Props:
     def __init__(self):
-        self.has_normals = False
-        self.has_tex_coords = False
         self.pos = vec3(0,0,0)
         self.ori = quat(1,0,0,0)
         self.scale = vec3(1,1,1)
@@ -104,6 +95,16 @@ class  Model_Attribute(object):
     def delete_buffer(self):
         glDeleteBuffers([self.buffer])
 
+    def setup(self, program, name):
+        location = glGetAttribLocation(program, name)
+        if location != -1:
+            glEnableVertexAttribArray(location)
+            glBindBuffer(GL_ARRAY_BUFFER,self.buffer)
+            glVertexAttribPointerARB(location,self.elem_len,
+                                     GL_FLOAT,GL_FALSE,0,
+                                     vbo_offset(self.offset))
+
+
 class Model_Elements(Model_Attribute):
     def __init__(self):
         super(Model_Elements,self).__init__("Elements")
@@ -114,6 +115,9 @@ class Model_Elements(Model_Attribute):
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, self.buffer)
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, vals, self.usage)
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,0)
+        
+    def setup(self):
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, self.buffer)
 
 class Model_Material():
     def __init__(self):
@@ -138,15 +142,15 @@ class Model_Material():
         self.use_wire_abs = 0
         self.wire_size = 0
         self.density = 0
-        self.texture1_map = Model_Texture_Map()
-        self.texture2_map = Model_Texture_Map()
-        self.opacity_map = Model_Texture_Map()
-        self.height_map = Model_Texture_Map()
-        self.normal_map = Model_Texture_Map()
-        self.specular_map = Model_Texture_Map()
-        self.shininess_map = Model_Texture_Map()
-        self.self_illum_map = Model_Texture_Map()
-        self.reflection_map = Model_Cube_Map()
+        self.texture1_map = Model_Texture_Map('texture1_map')
+        self.texture2_map = Model_Texture_Map('texture2_map')
+        self.opacity_map = Model_Texture_Map('opacity_map')
+        self.height_map = Model_Texture_Map('height_map')
+        self.normal_map = Model_Texture_Map('normal_map')
+        self.specular_map = Model_Texture_Map('specular_map')
+        self.shininess_map = Model_Texture_Map('shininess_map')
+        self.self_illum_map = Model_Texture_Map('self_illum_map')
+        self.reflection_map = Model_Cube_Map('reflection_map')
         self.bump_height = 0.02
         self.bump_bias = 0.5
 
@@ -167,14 +171,121 @@ class Model_Material():
                 names.append(a.texture_names())
         return names
 
+    def setup(self,scene):
+        current_texture = 1;
+        samplers2d = scene.textures.samplers2d
+        samplersCM = scene.textures.samplersCM
+        program = scene.active_program
+        
+    #Float uniforms
+        vals  = [self.shininess,self.shin_strength,
+                 self.transparency,self.self_illum,
+                 self.self_ilpct,self.bump_height,
+                 self.bump_bias]
+        names = ['mat_shininess','mat_shin_strength',
+                 'mat_transparency','mat_self_illum',
+                 'mat_self_ilpct','mat_bump_height',
+                 'mat_bump_bias']
+        for val,name in zip(vals,names):
+            loc = glGetUniformLocation(program,name)
+            glUniform1f(loc, val)
+            
+    #vec4 uniforms
+        vals  = [self.ambient, self.diffuse, self.specular]
+        names = ['mat_ambient','mat_diffuse','mat_specular']
+        for val,name in zip(vals,names):
+            loc = glGetUniformLocation(program,name)
+            glUniform4f(loc, val[0],val[1],val[2],val[3])
+        
+    #TextureMap uniforms
+        maps = [self.texture1_map,self.texture2_map,
+                self.height_map,self.normal_map,
+                self.specular_map,self.shininess_map,
+                self.self_illum_map,self.opacity_map]
+        for texmap in maps:
+            name = texmap.uniform
+
+            if not texmap.set:
+                loc = glGetUniformLocation(program,name + '.set')
+                glUniform1i(loc, 0)
+                loc = glGetUniformLocation(program,name + '.tex')
+                glUniform1i(loc, 0)
+                continue
+        
+            loc = glGetUniformLocation(program,name + '.set')
+            glUniform1i(loc, 1)
+
+            loc = glGetUniformLocation(program,name + '.rotation')
+            glUniform1f(loc, texmap.rotation)
+            
+            loc = glGetUniformLocation(program,name + '.percent')
+            glUniform1f(loc, texmap.percent)
+
+            loc = glGetUniformLocation(program,name + '.offset')
+            glUniform2f(loc, texmap.offset[0],texmap.offset[1])
+
+            loc = glGetUniformLocation(program,name + '.scale')
+            glUniform2f(loc, texmap.scale[0],texmap.scale[1])
+
+            glActiveTexture(GL_TEXTURE0+current_texture)
+            loc = glGetUniformLocation(program,name + '.tex')
+            texture = samplers2d[texmap.name]
+            texture.bind()
+
+            glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S,texmap.wrap_s)
+            glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T,texmap.wrap_t)
+            glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER,texmap.mag_filter)
+            glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,texmap.min_filter)
+            glTexParameterf( GL_TEXTURE_2D,  GL_TEXTURE_MAX_ANISOTROPY_EXT,
+                             texmap.max_anisotropy)
+
+
+            glUniform1i(loc, current_texture)
+            current_texture += 1
+
+    #If the shader declares and (possibly) uses a cubemap it MUST be set
+
+    #TextureCubemap uniforms
+        maps = [self.reflection_map]
+        for texmap in maps:
+            name = texmap.uniform
+            loc = glGetUniformLocation(program,name + '.set')
+            sampler_loc = glGetUniformLocation(program,name + '.tex')
+            glActiveTexture(GL_TEXTURE0+current_texture)
+
+        #If a cubemap is declared, any cubemap MUST be set, so we set a default one
+            if not texmap.set: 
+                glUniform1i(loc, 0)
+                texture = samplersCM['default']
+            else:
+                glUniform1i(loc, 1)
+
+                loc = glGetUniformLocation(program,name + '.rotation')
+                glUniform1f(loc, texmap.rotation)
+                loc = glGetUniformLocation(program,name + '.percent')
+                glUniform1f(loc, texmap.percent)
+
+                texture = samplersCM[texmap.name]
+            
+            texture.bind()
+            glUniform1i(sampler_loc, current_texture)
+            current_texture += 1
+        
+
 class Model_Texture_Map():
-    def __init__(self):
+    def __init__(self,uniform_name):
         self.set = False
         self.name = None
+        self.uniform = uniform_name
         self.scale = (1,1)
         self.offset = (0,0)
         self.rotation = 0.
         self.percent = 1.
+        self.mag_filter = GL_LINEAR
+        self.min_filter = GL_LINEAR_MIPMAP_LINEAR
+        self.wrap_s = GL_REPEAT
+        self.wrap_t = GL_REPEAT
+        self.max_anisotropy = glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT)
 
     def load3dsTextureMap(self,tm):
         if tm != None:
@@ -186,8 +297,9 @@ class Model_Texture_Map():
             self.percent = tm.percent
 
 class Model_Cube_Map():
-    def __init__(self):
+    def __init__(self,uniform_name):
         self.set = False
+        self.uniform = uniform_name
         self.rotation = 0.
         self.percent = 1.
         self.name = None
@@ -219,16 +331,12 @@ class Model_Texture():
         self.location = 0
         self.tex_file = None
         self.create_mipmap = True
-        self.mag_filter = GL_LINEAR
-        self.min_filter = GL_LINEAR_MIPMAP_LINEAR
-        self.wrap_s = GL_REPEAT
-        self.wrap_t = GL_REPEAT
-        self.max_anisotropy = glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT)
 
     def set_texture_file(self,f,debug = False):
         self.tex_file = f
 
-    def load(self):
+    def load(self,create_mipmap = True):
+
         if self.tex_file == None:
             print "Error: No texture file image set"
             return False
@@ -236,12 +344,13 @@ class Model_Texture():
         self.location = glGenTextures(1)
         glBindTexture(GL_TEXTURE_2D,self.location)
 
-        glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S,self.wrap_s)
-        glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T,self.wrap_t)
-        glTexParameteri( GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,self.mag_filter)
-        glTexParameteri( GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,self.min_filter)
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT,
-                        self.max_anisotropy)
+        # glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S,wrap_s)
+        # glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T,wrap_t)
+
+        # glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER,mag_filter)
+        # glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,min_filter)
+        # glTexParameterf( GL_TEXTURE_2D,  GL_TEXTURE_MAX_ANISOTROPY_EXT,
+        #                  max_anisotropy)
 
         try:
             im = ImageOps.flip(Image.open(self.tex_file).convert('RGB'))

@@ -241,7 +241,7 @@ def main():
     scene.active_program = program
 
     model_index = scene.loadObjModel('models/floor.obj')
-    teapot_index = scene.loadObjModel('models/teapot.obj')
+    # teapot_index = scene.loadObjModel('models/teapot.obj')
 
     if model_index == None:
         print 'Error loading model'
@@ -252,17 +252,17 @@ def main():
     model.props.pos = vec3(0,-0.5,3)
     model.props.scale = vec3(1)
 
-    for m in scene.models[teapot_index].models:
-        m.material.ambient = vec4(0.4,0.3,1,1)
-        tm = m.material.texture1_map
-        nm = m.material.normal_map
-        hm = m.material.height_map
-        tm.name = 'textures/masonry_wall-texture.jpg'
-        hm.name = 'textures/masonry_wall-height_map.jpg'
-        nm.name = 'textures/masonry_wall-normal_map.jpg'
-        tm.set = True
-        hm.set = True
-        nm.set = True
+    # for m in scene.models[teapot_index].models:
+    #     m.material.ambient = vec4(0.4,0.3,1,1)
+    #     tm = m.material.texture1_map
+    #     nm = m.material.normal_map
+    #     hm = m.material.height_map
+    #     tm.name = 'textures/masonry_wall-texture.jpg'
+    #     hm.name = 'textures/masonry_wall-height_map.jpg'
+    #     nm.name = 'textures/masonry_wall-normal_map.jpg'
+    #     tm.set = True
+    #     hm.set = True
+    #     nm.set = True
 
     for m in model.models:
         m.material.bump_height = 0.02
@@ -306,13 +306,18 @@ def main():
 
     scene.loadModelTextures()
     scene.cam.pos = vec3(0.,0.,3)
-    
+
+    scene.lights.ambient.intensity = 0.4
+
     spot_light = scene.lights.new_spot_light()
-    spot_light.pos = vec3(0,5,0)
+    spot_light.pos = vec3(0,1,0)
     spot_light.dir = vec3(0,-1,0)
     spot_light.reach = 10
     spot_light.dist_dimming = 0.5
     spot_light.ang_dimming = 2
+    spot_light.color = vec3(1,1,1)
+
+    print scene.lights.spots
 
     screen = Screen()
     screen.size = screen_size

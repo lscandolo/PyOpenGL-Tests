@@ -118,10 +118,14 @@ def drawObject(obj, scene, transf = mat4(1.0)):
         projection_loc = glGetUniformLocation(scene.active_program,"in_Projection")
         glUniformMatrix4fv(projection_loc, 1, GL_FALSE, proj)
 
-        setupMaterial(obj.material,scene)
+         #Setup material uniforms
+        obj.material.setup(scene)
+
+        #Setup object buffers
+        obj.setup(scene.active_program)
 
         #Send draw command
-        if obj.set_buffers(scene.active_program):
+        if obj.elements.elem_count > 0:
             vertex_count = obj.elements.elem_count * 3
             glDrawElements(GL_TRIANGLES,
                            vertex_count,
@@ -309,6 +313,13 @@ def main():
 
         # tm.name = 'textures/uvmap.png'
 
+
+        tm.mag_filter = GL_NEAREST
+        tm.min_filter = GL_NEAREST_MIPMAP_NEAREST
+        nm.mag_filter = GL_NEAREST
+        nm.min_filter = GL_NEAREST_MIPMAP_NEAREST
+        hm.mag_filter = GL_NEAREST
+        hm.min_filter = GL_NEAREST_MIPMAP_NEAREST
 
         tm.name = 'textures/grass-texture.jpg'
 

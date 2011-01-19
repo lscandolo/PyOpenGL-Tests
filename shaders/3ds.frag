@@ -91,43 +91,38 @@ vec2 tex_coords(TextureMap map, vec2 coords){
 }
 
 /* Lighting functions */
-vec3 reflected_light(vec3 f_col, vec3 f_pos, vec3 f_nor, float shininess){
+vec3 reflected_light(vec3 f_col, vec3 f_pos, vec3 f_nor, 
+		     float shininess, int i){
 
   vec3 final_color = vec3(0,0,0);
 
-  for (int i = 0; i < clamp(spot_light_count,0,10); i++){
-    vec3 l_pos = (in_View * vec4(spot_light[i].position,1)).xyz;
-    vec3 l_dir = normalize(mat3(in_View) * spot_light[i].direction).xyz;
-    vec3 l_col = spot_light[i].color;
+  vec3 l_pos = (in_View * vec4(spot_light[i].position,1)).xyz;
+  vec3 l_dir = normalize(mat3(in_View) * spot_light[i].direction).xyz;
+  vec3 l_col = spot_light[i].color;
 
-    vec3 lf_dir = normalize(f_pos-l_pos);
+  vec3 lf_dir = normalize(f_pos-l_pos);
 
-    float ang_dim = 1 - acos(dot(l_dir,lf_dir)) / (spot_light[i].aperture);
-    float dist_dim = 1 - distance(l_pos,f_pos) / spot_light[i].reach;
+  float ang_dim = 1 - acos(dot(l_dir,lf_dir)) / (spot_light[i].aperture);
+  float dist_dim = 1 - distance(l_pos,f_pos) / spot_light[i].reach;
 
-    if (ang_dim > 1 || ang_dim < 0 || dist_dim < 0 || dist_dim > 1)
-      continue;
+  if (ang_dim > 1 || ang_dim < 0 || dist_dim < 0 || dist_dim > 1)
+    return final_color;
 
-    ang_dim = pow(ang_dim,spot_light[i].ang_dimming);
-    dist_dim = pow(dist_dim,spot_light[i].dist_dimming);
+  ang_dim = pow(ang_dim,spot_light[i].ang_dimming);
+  dist_dim = pow(dist_dim,spot_light[i].dist_dimming);
 
-    float diffuse_strength = dot(f_nor,-lf_dir);
-    if (diffuse_strength < 0) continue;
-    final_color += diffuse_strength*(l_col * f_col);
+  float diffuse_strength = dot(f_nor,-lf_dir);
+  if (diffuse_strength < 0) return final_color;
+  final_color = diffuse_strength*(l_col * f_col);
     
-    vec3 reflection = reflect(lf_dir,f_nor);
-    float specular_strength = dot(normalize(-f_pos),normalize(reflection));
-    specular_strength = clamp(specular_strength,0,1);
-    specular_strength = pow(specular_strength,spot_light[i].specular_exponent);
-    specular_strength *= shininess;
-    final_color += specular_strength * l_col;
+  vec3 reflection = reflect(lf_dir,f_nor);
+  float specular_strength = dot(normalize(-f_pos),normalize(reflection));
+  specular_strength = clamp(specular_strength,0,1);
+  specular_strength = pow(specular_strength,spot_light[i].specular_exponent);
+  specular_strength *= shininess;
+  final_color += specular_strength * l_col;
 
-
-    final_color *= ang_dim*dist_dim*spot_light[i].intensity;
-  }
-
-  if (spot_light_count > 0)
-    final_color /= spot_light_count;
+  final_color *= ang_dim*dist_dim*spot_light[i].intensity;
   return final_color;
 }
 
@@ -144,93 +139,102 @@ void main(void)
   float self_illum;
   float self_ilpct;
 
-  if (specular_map.set){
-    vec2 coords = tex_coords(specular_map,ex_TexCoord);
-    specular = texture2D(specular_map.tex,coords).xyz;
-  }
-  else
-    specular = mat_specular.xyz;
-
-  if (shininess_map.set){
-    vec2 coords = tex_coords(shininess_map,ex_TexCoord);
-    shininess = texture2D(shininess_map.tex,coords).r;
-    shininess = clamp(shininess - 0.1,0,1);
-  }
-  else
-    shininess = mat_shininess;
-
-  if (self_illum_map.set){
-    vec2 coords = tex_coords(self_illum_map,ex_TexCoord);
-    self_illum = texture2D(self_illum_map.tex,coords).r;
-  }
-  else
-    self_illum = 0;
-
+  specular = mat_specular.xyz;
+  shininess = mat_shininess;
+  self_illum = 0;
   self_ilpct = mat_self_ilpct;
+  transparency = mat_transparency;
 
-  if (opacity_map.set){
-    vec2 coords = tex_coords(opacity_map,ex_TexCoord);
-    transparency = 1.0 - texture2D(opacity_map.tex,coords).r;
-  }
-  else
-    transparency = mat_transparency;
-
-  vec3 normal = normalize(ex_Normal);
+  vec3 normal = ex_Normal;
 
   // Parallax Occlusion Mapping
-  if (height_map.set){
+  const float maxheight = 1.0;
+  float height_factor = mat_bump_height;
 
-    const float maxheight = 1.0;
-    float height_factor = mat_bump_height;
+  /* const float minIter = 10; */
+  /* const float maxIter = 40; */
+  /* const float iterStep = 8; */
+  const float minIter = 50;
+  const float maxIter = 200;
+  const float iterStep = 40;
 
-    const float minIter = 10;
-    const float maxIter = 40;
-    const float iterStep = 8;
+  /* Texture vector corresponding plus height info*/
+  vec3 tex_coords = vec3(tex_coords(height_map,ex_TexCoord),0);
+  
+  /*Iterations are a function of steepness : the more shallow, the more
+    iterations we do to make sure we don't overshoot the bias by too much and
+    we don't miss intersections */
+  float linear_iterations = int(iterStep * length(parallax.xy));
 
-    /* Texture vector corresponding plus height info*/
-    vec3 tex_coords = vec3(tex_coords(height_map,ex_TexCoord),0);
-
-    /*Iterations are a function of steepness : the more shallow, the more
-     iterations we do to make sure we don't overshoot the bias by too much and
-     we don't miss intersections */
-    float linear_iterations = int(iterStep * length(parallax.xy));
-    linear_iterations = clamp(linear_iterations,int(minIter),int(maxIter));
-
-    /* Parallax step direction to traverse the heightmap */
-    vec3 pllxStep = parallax / float(linear_iterations);
-    pllxStep.xy *= height_factor;
-
-    float h = (texture2D(height_map.tex,tex_coords.xy).x - 1) * maxheight;
-
-
-    /* Linear search*/
-    int i = 0;
-    for (; i < linear_iterations; i++){
-      tex_coords += pllxStep;
-      h = (texture2D(height_map.tex,tex_coords.xy).x - 1) * maxheight;
-      if (tex_coords.z < h) break;
-    }
-    /*-----------------------*/
-
-    /* Secant method (one step)*/
-    vec3 p0 = tex_coords - pllxStep;
-    float h0 = (texture2D(height_map.tex,p0.xy).x - 1) * maxheight;
-    float a = (h0 - p0.z) / (pllxStep.z - (h-h0));
-    tex_coords = p0 + a * pllxStep;
-    /*-------------------------*/
-
-    if (texture1_map.set){
-      ambient = texture2D(texture1_map.tex,tex_coords.xy).xyz 
-	* texture1_map.percent;
-      diffuse = ambient;
-    }
-    
-    if (normal_map.set){
-      normal =  texture2D(normal_map.tex,tex_coords.xy).xyz - vec3(0.5);
-      normal = mat3(ex_Tangent,ex_Bitangent,ex_Normal) * normal;
-      normal = normalize(normal);
-    }
+  linear_iterations = clamp(linear_iterations,int(minIter),int(maxIter));
+  
+  /* Parallax step direction to traverse the heightmap */
+  vec3 pllxStep = parallax / float(linear_iterations);
+  pllxStep.xy *= height_factor;
+  
+  float h = (texture2D(height_map.tex,tex_coords.xy).x - 1) * maxheight;
+  
+  
+  /* Linear search*/
+  int i = 0;
+  for (; i < linear_iterations; i++){
+    tex_coords += pllxStep;
+    h = (texture2D(height_map.tex,tex_coords.xy).x - 1) * maxheight;
+    if (tex_coords.z < h) break;
   }
+  /*-----------------------*/
+  
+  /* Secant method (one step)*/
+  vec3 p0 = tex_coords - pllxStep;
+  float h0 = (texture2D(height_map.tex,p0.xy).x - 1) * maxheight;
+  float a = (h0 - p0.z) / (pllxStep.z - (h-h0));
+  tex_coords = p0 + a * pllxStep;
+  /*-------------------------*/
+
+  /*Getting color from texture*/
+  ambient = texture2D(texture1_map.tex,tex_coords.xy).xyz * texture1_map.percent;
+  diffuse = ambient;
+    
+  /* Normal from normal map*/
+  normal =  texture2D(normal_map.tex,tex_coords.xy).xyz - vec3(0.5);
+  normal = mat3(ex_Tangent,ex_Bitangent,ex_Normal) * normal;
+  normal = normalize(normal);
+
+  /*Self-shadowing */
+  float H = (texture2D(height_map.tex,tex_coords.xy).x - 1) * maxheight;
+  vec3 hitPoint = vec3(tex_coords.xy,H);
+
+  mat3 tbnTransf = transpose(mat3(ex_Tangent,ex_Bitangent,ex_Normal));
+   
+  /*Lighting and self (hard) shadowing*/
+  int  spots_lighted = 0;
+  vec3 spot_color = vec3(0,0,0);
+  for (int l = 0; l < spot_light_count; l++){
+    /*tbnLVec is the vector from the intersection to the spot light, translated 
+     into tbn space and then scaled to provide a step from the hit point to the
+     lightsource*/
+    vec3 tbnLVec = (in_View*vec4(spot_light[l].position,1.0)).xyz - ex_Position;
+    tbnLVec = tbnTransf * tbnLVec;
+    /* We divide it by the z coordinate and multiply by the distance 
+       to the surfacehitPoint.z to make a vector whose z length is the
+       length to get to the 'surface'*/
+    /* Then we divide by the iteration number*/
+    tbnLVec = (tbnLVec * abs(hitPoint.z)) / abs(tbnLVec.z);
+    tbnLVec /= linear_iterations;
+    tbnLVec.xy *= height_factor;
+    vec3 testPoint = hitPoint;
+      for (i = 0; i < linear_iterations;i++){
+	testPoint += tbnLVec;
+	H = (texture2D(height_map.tex,testPoint.xy).x - 1) * maxheight;
+	if(testPoint.z < H) break;
+      }
+      if (i == linear_iterations){
+	spots_lighted++;
+	spot_color += reflected_light(diffuse, ex_Position, normal, shininess,l);
+      }
+  }
+  if (spots_lighted > 0) spot_color /= spots_lighted;
+
 
   if (reflection_map.set){
     mat3 transf = mat3(in_ModelviewInv);
@@ -239,11 +243,10 @@ void main(void)
     diffuse  = ambient;
   }
 
-  vec3 spot_color = reflected_light(diffuse, ex_Position, normal, shininess);
 
+  /* vec3 spot_color = reflected_light(diffuse, ex_Position, normal, shininess); */
   vec3 ambient_color = ambient_light.intensity * normalize(ambient_light.color);
   ambient_color *= ambient;
-
   vec3 color = spot_color + ambient_color;
 
   gl_FragColor = vec4(color,transparency);
@@ -251,3 +254,13 @@ void main(void)
 
 
 }
+
+/* There are advanced techniques for */
+/* smooth shadows */
+/* » */
+/* The most prominent are */
+/* » */
+/* » */
+/* VSMs, layered VSMs, CSMs, ESMs, ACDF SMs */
+/* Can be combined with SATs for arbitary */
+/* smoothness */

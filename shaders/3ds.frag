@@ -1,21 +1,21 @@
 #version 140
 
-/* Matrices */
+/* ------------------- Matrices  -----------------------------*/
 uniform mat4 in_Modelview;
 uniform mat4 in_ModelviewInv;
 uniform mat4 in_View;
 uniform mat4 in_Projection;
 
-/* Geometry data */
+/* --------------------- Geometry data --------------------*/
 smooth in vec3 ex_Color;
 smooth in vec3 ex_Normal;
 smooth in vec2 ex_TexCoord;
 smooth in vec3 ex_Position;
 smooth in vec3 ex_Tangent;
 smooth in vec3 ex_Bitangent;
-smooth in vec3 parallax;
+smooth in vec3 tbnView;
 
-/* Material variables */
+/* -------------------- Material variables ----------------- */
 uniform vec4  mat_ambient;
 uniform vec4  mat_diffuse;
 uniform vec4  mat_specular;
@@ -27,7 +27,7 @@ uniform float mat_self_ilpct;
 uniform float mat_bump_height;
 uniform float mat_bump_bias;
 
-/* Texture variables */
+/* ---------------------- Texture variables -----------------------*/
 struct TextureMap{
   bool      set;
   sampler2D tex;
@@ -54,7 +54,7 @@ uniform TextureMap shininess_map;
 uniform TextureMap self_illum_map;
 uniform TextureCubemap reflection_map;
 
-/* Light variables */
+/*  -------------------------- Light variables ---------------- */
 struct AmbientLight{
   float intensity;
   vec3  color;
@@ -73,11 +73,11 @@ struct SpotLight{
 };
 
 uniform AmbientLight ambient_light;
-uniform int          spot_light_count;
 uniform SpotLight    spot_light[10];
+uniform int          spot_light_count;
 
 
-/* Texture functions*/
+/* ----------------------- Texture functions -------------------*/
 mat2 tex_rot(float r){
   return mat2(cos(r),sin(r),-sin(r),cos(r));
 }
@@ -90,7 +90,9 @@ vec2 tex_coords(TextureMap map, vec2 coords){
   return tex_scale(map.scale)*tex_rot(map.rotation)*(coords-map.offset);
 }
 
-/* Lighting functions */
+const float minreach = 0.01;
+
+/* ----------------  Lighting functions  --------------------- */
 vec3 reflected_light(vec3 f_col, vec3 f_pos, vec3 f_nor, 
 		     float shininess, int i){
 
@@ -99,18 +101,21 @@ vec3 reflected_light(vec3 f_col, vec3 f_pos, vec3 f_nor,
   vec3 l_pos = (in_View * vec4(spot_light[i].position,1)).xyz;
   vec3 l_dir = normalize(mat3(in_View) * spot_light[i].direction).xyz;
   vec3 l_col = spot_light[i].color;
-
   vec3 lf_dir = normalize(f_pos-l_pos);
 
-  float ang_dim = 1 - acos(dot(l_dir,lf_dir)) / (spot_light[i].aperture);
-  float dist_dim = 1 - distance(l_pos,f_pos) / spot_light[i].reach;
+  float lf_cosang = dot(l_dir,lf_dir);
+  float lf_dist   = distance(l_pos,f_pos);
 
-  if (ang_dim > 1 || ang_dim < 0 || dist_dim < 0 || dist_dim > 1)
+  if (lf_cosang < 0 ||
+      lf_cosang > spot_light[i].aperture ||
+      lf_dist   > spot_light[i].reach)
     return final_color;
 
-  ang_dim = pow(ang_dim,spot_light[i].ang_dimming);
-  dist_dim = pow(dist_dim,spot_light[i].dist_dimming);
+  float ang_dim = pow(lf_cosang,spot_light[i].ang_dimming);
 
+  float dist_dim = 
+    min(1,spot_light[i].reach - lf_dist / (spot_light[i].reach - minreach));
+  
   float diffuse_strength = dot(f_nor,-lf_dir);
   if (diffuse_strength < 0) return final_color;
   final_color = diffuse_strength*(l_col * f_col);
@@ -126,7 +131,7 @@ vec3 reflected_light(vec3 f_col, vec3 f_pos, vec3 f_nor,
   return final_color;
 }
 
-
+/* -------------------------------- main -----------------------------*/
 void main(void)
 {
   vec3  ambient = vec3(mat_ambient);
@@ -147,104 +152,51 @@ void main(void)
 
   vec3 normal = ex_Normal;
 
-  // Parallax Occlusion Mapping
-  const float maxheight = 1.0;
+  ////--------------------Parallax Mapping
+
   float height_factor = mat_bump_height;
+  float bias_factor = mat_bump_bias;
+  float h;
 
-  /* const float minIter = 10; */
-  /* const float maxIter = 40; */
-  /* const float iterStep = 8; */
-  const float minIter = 50;
-  const float maxIter = 200;
-  const float iterStep = 40;
+  int iterations = 3;
+  vec2 parallax = -normalize(tbnView).xy;
+  vec2 tex_coords =  tex_coords(height_map,ex_TexCoord);
 
-  /* Texture vector corresponding plus height info*/
-  vec3 tex_coords = vec3(tex_coords(height_map,ex_TexCoord),0);
-  
-  /*Iterations are a function of steepness : the more shallow, the more
-    iterations we do to make sure we don't overshoot the bias by too much and
-    we don't miss intersections */
-  float linear_iterations = int(iterStep * length(parallax.xy));
-
-  linear_iterations = clamp(linear_iterations,int(minIter),int(maxIter));
-  
-  /* Parallax step direction to traverse the heightmap */
-  vec3 pllxStep = parallax / float(linear_iterations);
-  pllxStep.xy *= height_factor;
-  
-  float h = (texture2D(height_map.tex,tex_coords.xy).x - 1) * maxheight;
-  
-  
-  /* Linear search*/
-  int i = 0;
-  for (; i < linear_iterations; i++){
-    tex_coords += pllxStep;
-    h = (texture2D(height_map.tex,tex_coords.xy).x - 1) * maxheight;
-    if (tex_coords.z < h) break;
+  //We iterate to get higher accuracy
+  for (; iterations > 0; iterations--){
+    h = texture2D(height_map.tex,tex_coords.xy).x;
+    h = (h - bias_factor) * height_factor;
+    tex_coords += (h * parallax)/* /pllxOffset.z */;
   }
-  /*-----------------------*/
-  
-  /* Secant method (one step)*/
-  vec3 p0 = tex_coords - pllxStep;
-  float h0 = (texture2D(height_map.tex,p0.xy).x - 1) * maxheight;
-  float a = (h0 - p0.z) / (pllxStep.z - (h-h0));
-  tex_coords = p0 + a * pllxStep;
-  /*-------------------------*/
 
-  /*Getting color from texture*/
-  ambient = texture2D(texture1_map.tex,tex_coords.xy).xyz * texture1_map.percent;
-  diffuse = ambient;
-    
-  /* Normal from normal map*/
-  normal =  texture2D(normal_map.tex,tex_coords.xy).xyz - vec3(0.5);
-  normal = mat3(ex_Tangent,ex_Bitangent,ex_Normal) * normal;
-  normal = normalize(normal);
 
-  /*Self-shadowing */
-  float H = (texture2D(height_map.tex,tex_coords.xy).x - 1) * maxheight;
-  vec3 hitPoint = vec3(tex_coords.xy,H);
-
-  mat3 tbnTransf = transpose(mat3(ex_Tangent,ex_Bitangent,ex_Normal));
-   
-  /*Lighting and self (hard) shadowing*/
-  int  spots_lighted = 0;
-  vec3 spot_color = vec3(0,0,0);
-  for (int l = 0; l < spot_light_count; l++){
-    /*tbnLVec is the vector from the intersection to the spot light, translated 
-     into tbn space and then scaled to provide a step from the hit point to the
-     lightsource*/
-    vec3 tbnLVec = (in_View*vec4(spot_light[l].position,1.0)).xyz - ex_Position;
-    tbnLVec = tbnTransf * tbnLVec;
-    /* We divide it by the z coordinate and multiply by the distance 
-       to the surfacehitPoint.z to make a vector whose z length is the
-       length to get to the 'surface'*/
-    /* Then we divide by the iteration number*/
-    tbnLVec = (tbnLVec * abs(hitPoint.z)) / abs(tbnLVec.z);
-    tbnLVec /= linear_iterations;
-    tbnLVec.xy *= height_factor;
-    vec3 testPoint = hitPoint;
-      for (i = 0; i < linear_iterations;i++){
-	testPoint += tbnLVec;
-	H = (texture2D(height_map.tex,testPoint.xy).x - 1) * maxheight;
-	if(testPoint.z < H) break;
-      }
-      if (i == linear_iterations){
-	spots_lighted++;
-	spot_color += reflected_light(diffuse, ex_Position, normal, shininess,l);
-      }
+  //// -------------- Texture retrieval
+  if (texture1_map.set){
+    ambient = texture2D(texture1_map.tex,tex_coords).xyz * texture1_map.percent;
+    diffuse = ambient;
   }
-  if (spots_lighted > 0) spot_color /= spots_lighted;
+
+  if (normal_map.set){
+    normal =  texture2D(normal_map.tex,tex_coords.xy).xyz - vec3(0.5,0.5,0.5);
+    normal = mat3(ex_Tangent,ex_Bitangent,ex_Normal) * normal;
+    normal = normalize(normal);
+  }
 
 
   if (reflection_map.set){
     mat3 transf = mat3(in_ModelviewInv);
     vec3 ref = reflect(transf*ex_Position,transf*normal);
     ambient += texture(reflection_map.tex,ref).xyz * reflection_map.percent;
-    diffuse  = ambient;
+    diffuse = ambient;
   }
 
+  /////// Lighting computation
+  vec3 spot_color = vec3(0.f);
+  for (int l = 0; l < spot_light_count; l++){
+    spot_color += reflected_light(diffuse, ex_Position, normal, shininess,l);
+  }
 
-  /* vec3 spot_color = reflected_light(diffuse, ex_Position, normal, shininess); */
+  ////// Color adjusting
   vec3 ambient_color = ambient_light.intensity * normalize(ambient_light.color);
   ambient_color *= ambient;
   vec3 color = spot_color + ambient_color;

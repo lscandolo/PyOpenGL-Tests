@@ -151,7 +151,7 @@ class Model_Material():
         self.shininess_map = Model_Texture_Map('shininess_map')
         self.self_illum_map = Model_Texture_Map('self_illum_map')
         self.reflection_map = Model_Cube_Map('reflection_map')
-        self.bump_height = 0.02
+        self.bump_height = 0.015
         self.bump_bias = 0.5
 
     def texture2d_names(self):

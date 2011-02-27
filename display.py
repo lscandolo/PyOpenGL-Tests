@@ -79,9 +79,10 @@ def keyPressed(key,x,y,scene):
         light.intensity += 0.1
     if key == 'l':
         light.intensity -= 0.1
-    # light.dir.x = light.pos.x
-    # light.dir.z = light.pos.z
-    # light.dir.normalize()
+    if key == 'y':
+        light.pos.y += 0.1
+    if key == 'i':
+        light.pos.y -= 0.1
             
 
 def drawScene(scene):
@@ -241,9 +242,10 @@ def main():
     scene.active_program = program
 
     model_index = scene.loadObjModel('models/floor.obj')
-    # teapot_index = scene.loadObjModel('models/teapot.obj')
+    teapot_index = scene.loadObjModel('models/teapot.obj')
+    # teapot_index = scene.loadObjModel('models/teapot-low_res.obj')
 
-    if model_index == None:
+    if model_index or teapot_index == None:
         print 'Error loading model'
         exit(-1)
 
@@ -252,20 +254,20 @@ def main():
     model.props.pos = vec3(0,-0.5,3)
     model.props.scale = vec3(1)
 
-    # for m in scene.models[teapot_index].models:
-    #     m.material.ambient = vec4(0.4,0.3,1,1)
-    #     tm = m.material.texture1_map
-    #     nm = m.material.normal_map
-    #     hm = m.material.height_map
-    #     tm.name = 'textures/masonry_wall-texture.jpg'
-    #     hm.name = 'textures/masonry_wall-height_map.jpg'
-    #     nm.name = 'textures/masonry_wall-normal_map.jpg'
-    #     tm.set = True
-    #     hm.set = True
-    #     nm.set = True
+    for m in scene.models[teapot_index].models:
+        m.material.ambient = vec4(0.4,0.3,1,1)
+        tm = m.material.texture1_map
+        nm = m.material.normal_map
+        hm = m.material.height_map
+        tm.name = 'textures/masonry_wall-texture.jpg'
+        hm.name = 'textures/masonry_wall-height_map.jpg'
+        nm.name = 'textures/masonry_wall-normal_map.jpg'
+        tm.set = True
+        hm.set = True
+        nm.set = True
 
     for m in model.models:
-        m.material.bump_height = 0.02
+        m.material.bump_height = 0.015
 
         tm = m.material.texture1_map
         nm = m.material.normal_map
@@ -305,12 +307,12 @@ def main():
                       'textures/cubemap/sky_z_neg.jpg')
 
     scene.loadModelTextures()
-    scene.cam.pos = vec3(0.,0.,3)
+    scene.cam.pos = vec3(0.,1,3.)
 
-    scene.lights.ambient.intensity = 0.4
+    scene.lights.ambient.intensity = 0.6
 
     spot_light = scene.lights.new_spot_light()
-    spot_light.pos = vec3(0,1,0)
+    spot_light.pos = vec3(0,3,0)
     spot_light.dir = vec3(0,-1,0)
     spot_light.reach = 10
     spot_light.dist_dimming = 0.5

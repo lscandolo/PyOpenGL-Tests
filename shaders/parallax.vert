@@ -20,8 +20,8 @@ smooth out vec3 tbnView;
 
 void main(void)
 {
-  ex_Normal     = (in_Modelview * vec4(in_Normal,0.0)).xyz;
-  ex_Tangent    = (in_Modelview * vec4(in_Tangent.xyz,0.0)).xyz;
+  ex_Normal     = normalize(in_Modelview * vec4(in_Normal,0.0)).xyz;
+  ex_Tangent    = normalize(in_Modelview * vec4(in_Tangent.xyz,0.0)).xyz;
 
   ex_Bitangent  = cross(in_Normal,in_Tangent.xyz);
   ex_Bitangent  = (in_Modelview * vec4(ex_Bitangent,0.0)).xyz;
@@ -35,12 +35,9 @@ void main(void)
   /*Transf transforms from world space to tangent space
     (its transpose does the opposite)*/
   mat3 tbnTransf = transpose(mat3(ex_Tangent,ex_Bitangent,ex_Normal));
+
   tbnView = tbnTransf * ex_Position;
 
   /* We cannot normalize the tbnView vector here because it is in tangent space
    so the perspective correction that would be applied would not be correct*/
-
-
-
-
 }

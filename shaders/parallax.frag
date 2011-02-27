@@ -117,7 +117,7 @@ void main(void)
   else
     transparency = mat_transparency;
 
-  vec3 normal = normalize(ex_Normal);
+  vec3 normal = ex_Normal;
 
   // Parallax mapping 
   if (height_map.set){

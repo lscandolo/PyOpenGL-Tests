@@ -8,6 +8,11 @@ OpenGL.FORWARD_COMPATIBLE_ONLY = True
 from OpenGL.GL import *
 from OpenGL.GLUT import *
 
+# from OpenGL.GL.ARB.framebuffer_object import *
+# from OpenGL.GL.EXT.framebuffer_object import *
+from OpenGL.GL.framebufferobjects import *
+
+
 import numpy
 from scene import Scene,Screen
 
@@ -84,103 +89,6 @@ def keyPressed(key,x,y,scene):
     if key == 'i':
         light.pos.y -= 0.1
             
-
-def drawScene(scene):
-    global frames
-
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-
-    #Draw cubemap 
-    if scene.cubemap != None:
-        drawCubemap(scene)
-        glClear(GL_DEPTH_BUFFER_BIT)
-
-    #Set shaders
-    glUseProgram(scene.active_program)
-      
-    #Setup light uniforms
-    scene.lights.setup(scene)
-
-    #Draw Objects
-    for obj in scene.models:
-        drawObject(obj,scene)
-
-    #Swap buffer
-    glutSwapBuffers()
-
-    frames += 1
-    time = glutGet(GLUT_ELAPSED_TIME)/1000
-    if time > scene.time + 1:
-        print 'FPS:', frames
-        frames = 0
-        scene.time = time
-        
-
-def drawCubemap(scene):
-    scene.cubemap.use_program()
-    glActiveTexture(GL_TEXTURE0)
-    tex_name = scene.cubemap.texture.name
-    scene.cubemap.bindTexture(scene.textures.samplersCM[tex_name])
-    mvpTransf = numpy.array(list(scene.cam.projTransf * scene.cam.rotTransf()),
-                            dtype="float32")
-    scene.cubemap.draw(mvpTransf)
-
-def drawObject(obj, scene, transf = mat4(1.0)):
-    cam = scene.cam
-
-    if type(obj) == Model_Set:
-        new_transf = transf * obj.props.transf()
-        for model in obj.models: 
-            drawObject(model,scene, new_transf)
-    elif type(obj) == Model_Object:
-
-        #Set mv transform
-        new_transf = transf * obj.props.transf() 
-
-        modelview =   cam.transf() * new_transf
-
-        #Modelview transform
-        transf_array = numpy.array([val for val in modelview], dtype="float32")
-        loc = glGetUniformLocation(scene.active_program,"in_Modelview")
-        glUniformMatrix4fv(loc, 1, GL_FALSE, transf_array)
-
-        #Modelview inverse transform
-        modelviewInv = modelview.inverse()
-        transf_array = numpy.array([val for val in modelviewInv], dtype="float32")
-        loc = glGetUniformLocation(scene.active_program,"in_ModelviewInv")
-        glUniformMatrix4fv(loc, 1, GL_FALSE, transf_array)
-
-        #View transform
-        view = cam.transf()
-        transf_array = numpy.array([val for val in view], dtype="float32")
-        loc = glGetUniformLocation(scene.active_program,"in_View")
-        glUniformMatrix4fv(loc, 1, GL_FALSE, transf_array)
-
-        #Set projection transform
-        proj = numpy.array([val for val in cam.projTransf], dtype="float32")
-        loc = glGetUniformLocation(scene.active_program,"in_Projection")
-        glUniformMatrix4fv(loc, 1, GL_FALSE, proj)
-
-        #Setup material uniforms
-        obj.material.setup(scene)
-
-        #Setup object buffers
-        obj.setup(scene.active_program)
-        
-        #Send draw command
-        if obj.elements.elem_count > 0:
-            vertex_count = obj.elements.elem_count * 3
-            glDrawElements(GL_TRIANGLES,
-                           vertex_count,
-                           GL_UNSIGNED_INT,
-                           vbo_offset(obj.elements.offset))
-
-            if glGetError() != GL_NO_ERROR:
-                print "Error: " + str(glGetError())
-
-    else:
-        return
-
 def initShaders(v_filename, f_filename):
     v_shader = glCreateShader(GL_VERTEX_SHADER)
     v_shader_source = [open(v_filename,'r').read()]
@@ -197,18 +105,17 @@ def initShaders(v_filename, f_filename):
     glCompileShader(v_shader)
     glCompileShader(f_shader)
     
-    print glGetShaderInfoLog(v_shader)
-    print glGetShaderInfoLog(f_shader)
-
     glLinkProgram(program)
     glValidateProgram(program)
     
+    print "/////////////////Main  shaders status:"
+    print glGetShaderInfoLog(v_shader)
+    print glGetShaderInfoLog(f_shader)
     print glGetProgramInfoLog(program)
+    print "Main program location:", program
+    print "///////////////////////////////////////"
 
     glUseProgram(program)
-
-    print "active_program:", program
-
     return program
 
 def startOpengl():
@@ -233,6 +140,7 @@ def startOpengl():
     return screen_size
 
 def main():
+
     screen_size = startOpengl()
     program = initShaders("shaders/3ds.vert", "shaders/3ds.frag")
     # program = initShaders("shaders/parallax.vert", "shaders/parallax.frag")
@@ -240,33 +148,39 @@ def main():
 
     scene = Scene()
     scene.active_program = program
+    scene.initShadowFB()
 
-    model_index = scene.loadObjModel('models/floor.obj')
-    teapot_index = scene.loadObjModel('models/teapot.obj')
+    floor_index = scene.loadObjModel('models/floor.obj')
+    # teapot_index = scene.loadObjModel('models/teapot.obj')
     # teapot_index = scene.loadObjModel('models/teapot-low_res.obj')
 
-    if model_index or teapot_index == None:
-        print 'Error loading model'
-        exit(-1)
+    # if floor_index or teapot_index == None:
+    #     print 'Error loading model'
+    #     exit(-1)
 
-    model = scene.models[model_index]
+    floor = scene.models[floor_index]
+    # teapot = scene.models[teapot_index]
 
-    model.props.pos = vec3(0,-0.5,3)
-    model.props.scale = vec3(1)
+    floor.props.pos = vec3(0,-0.5,3)
+    floor.props.scale = vec3(1)
 
-    for m in scene.models[teapot_index].models:
-        m.material.ambient = vec4(0.4,0.3,1,1)
-        tm = m.material.texture1_map
-        nm = m.material.normal_map
-        hm = m.material.height_map
-        tm.name = 'textures/masonry_wall-texture.jpg'
-        hm.name = 'textures/masonry_wall-height_map.jpg'
-        nm.name = 'textures/masonry_wall-normal_map.jpg'
-        tm.set = True
-        hm.set = True
-        nm.set = True
+    # for m in teapot.models:
+    #     m.material.ambient = vec4(0.4,0.3,1,1)
+    #     tm = m.material.texture1_map
+    #     nm = m.material.normal_map
+    #     hm = m.material.height_map
+    #     tm.name = 'textures/masonry_wall-texture.jpg'
+    #     hm.name = 'textures/masonry_wall-height_map.jpg'
+    #     nm.name = 'textures/masonry_wall-normal_map.jpg'
+    #     sc = 4
+    #     tm.scale = (sc,sc)
+    #     hm.scale = (sc,sc)
+    #     nm.scale = (sc,sc)
+    #     tm.set = True
+    #     hm.set = True
+    #     nm.set = True
 
-    for m in model.models:
+    for m in floor.models:
         m.material.bump_height = 0.015
 
         tm = m.material.texture1_map
@@ -277,7 +191,7 @@ def main():
         hm.name = 'textures/brickwork-height_map.jpg'
         nm.name = 'textures/brickwork-normal_map.jpg'
 
-        sc = 1
+        sc = 2
         tm.scale = (sc,sc)
         hm.scale = (sc,sc)
         nm.scale = (sc,sc)
@@ -316,7 +230,7 @@ def main():
     spot_light.dir = vec3(0,-1,0)
     spot_light.reach = 10
     spot_light.dist_dimming = 0.5
-    spot_light.ang_dimming = 2
+    spot_light.ang_dimming = 0.5
     spot_light.color = vec3(1,1,1)
 
     print scene.lights.spots
@@ -324,8 +238,60 @@ def main():
     screen = Screen()
     screen.size = screen_size
 
-    glutDisplayFunc(lambda : drawScene(scene))
-    glutIdleFunc(lambda : drawScene(scene))
+
+
+    # glBindFramebuffer(a)
+    shadow_texture = glGenTextures(1)
+    glBindTexture(GL_TEXTURE_2D,shadow_texture)
+    glTexEnvf( GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE )
+    glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S,
+                     GL_REPEAT )
+    glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T,
+                     GL_REPEAT )
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+
+    data = numpy.ndarray(shape=(640,480),dtype='uint32',order='C')
+    glTexImage2Dui(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32, 0, GL_DEPTH_COMPONENT, data)
+    
+
+    a = glGenFramebuffers(1)
+    glBindFramebuffer(GL_FRAMEBUFFER, a)
+    # glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+    #                        GL_TEXTURE_2D, shadow_texture, 0)
+    
+    
+
+    # Gen renderbuffer
+    myRB = glGenRenderbuffers(1)
+
+    # Bind renderbuffer
+    glBindRenderbuffer(GL_RENDERBUFFER, myRB)
+
+    # Init as a depth buffer
+    glRenderbufferStorage( GL_RENDERBUFFER, GL_DEPTH_COMPONENT32, 
+                           screen.size[0], screen.size[1])
+
+    # Attach to the FBO for depth
+    # glFramebufferRenderbuffer( GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, 
+    #                               GL_RENDERBUFFER, myRB);
+    
+    #Attach texture for depth
+    glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER,GL_DEPTH_ATTACHMENT,
+                           GL_TEXTURE_2D,shadow_texture,0)
+
+    glBindRenderbuffer(GL_RENDERBUFFER, myRB)
+
+    #Don't write anything to color attachments
+    bdata = numpy.array([GL_NONE],dtype='uint32')
+    glDrawBuffers(bdata)
+    
+    glBindRenderbuffer(GL_RENDERBUFFER, 0)
+    glBindFramebuffer(GL_FRAMEBUFFER, 0)
+
+
+    glutDisplayFunc(lambda : scene.drawScene())
+    glutIdleFunc(lambda : scene.drawScene())
     glutReshapeFunc(lambda w,h: reshape(w,h,screen))
 
     glutKeyboardFunc(lambda key,x,y : keyPressed(key,x,y,scene))

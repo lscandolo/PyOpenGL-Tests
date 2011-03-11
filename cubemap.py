@@ -80,18 +80,15 @@ class Cubemap:
         glCompileShader(self.vertex_shader_id)
         glCompileShader(self.fragment_shader_id)
         
-        if debug:
-            print glGetShaderInfoLog(self.vertex_shader_id)
-            print glGetShaderInfoLog(self.fragment_shader_id)
-        
         glLinkProgram(program)
         glValidateProgram(program)
-        
-        if debug:
-            print glGetProgramInfoLog(program)
-        
-        self.program = program
 
+        print "////////////////Cubemap shaders status:"
+        print glGetShaderInfoLog(self.vertex_shader_id)
+        print glGetShaderInfoLog(self.fragment_shader_id)
+        print glGetProgramInfoLog(program)
+        print "///////////////////////////////////////"
+        self.program = program
         return True
 
     def set_textures(self,xp,xn,yp,yn,zp,zn,debug = False):

@@ -8,8 +8,6 @@ import Image
 import ImageOps
 from cgkit.sl import radians
 
-from light import *
-
 numpy = __import__("numpy")
 import cgkit
 from cgkit.all import *
@@ -383,6 +381,26 @@ class Model_Texture():
 
     def bind(self):
         glBindTexture(GL_TEXTURE_2D, self.location)
+        glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE)
+
+class Model_Shadow_Texture():
+    def __init__(self):
+        self.location = 0
+
+    def allocate(self,resolution):
+        self.location = glGenTextures(1)
+        glBindTexture(GL_TEXTURE_2D,self.location)
+        data = numpy.ndarray((resolution,resolution),dtype='uint32',order='C')
+        glBindTexture(GL_TEXTURE_2D,self.location)
+        glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S,
+                         GL_REPEAT )
+        glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T,
+                         GL_REPEAT )
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+
+        data = numpy.ndarray(shape=(640,480),dtype='uint32',order='C')
+        glTexImage2Dui(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32, 0, GL_DEPTH_COMPONENT, data)
 
 class Model_Cubemap_Texture():
     def __init__(self):

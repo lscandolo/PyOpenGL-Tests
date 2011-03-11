@@ -107,11 +107,11 @@ vec3 reflected_light(vec3 f_col, vec3 f_pos, vec3 f_nor,
   float lf_dist   = distance(l_pos,f_pos);
 
   if (lf_cosang < 0 ||
-      lf_cosang > spot_light[i].aperture ||
+      lf_cosang < cos(spot_light[i].aperture) ||
       lf_dist   > spot_light[i].reach)
     return final_color;
 
-  float ang_dim = pow(lf_cosang,spot_light[i].ang_dimming);
+  float ang_dim = pow(lf_cosang-cos(spot_light[i].aperture),spot_light[i].ang_dimming);
 
   float dist_dim = 
     min(1,spot_light[i].reach - lf_dist / (spot_light[i].reach - minreach));
@@ -170,19 +170,20 @@ void main(void)
   }
 
 
-  //// -------------- Texture retrieval
+  //// Color Texture retrieval
   if (texture1_map.set){
     ambient = texture2D(texture1_map.tex,tex_coords).xyz * texture1_map.percent;
     diffuse = ambient;
   }
 
+  ////////// Normal mapping
   if (normal_map.set){
     normal =  texture2D(normal_map.tex,tex_coords.xy).xyz - vec3(0.5,0.5,0.5);
     normal = mat3(ex_Tangent,ex_Bitangent,ex_Normal) * normal;
     normal = normalize(normal);
   }
 
-
+  //////// Reflections
   if (reflection_map.set){
     mat3 transf = mat3(in_ModelviewInv);
     vec3 ref = reflect(transf*ex_Position,transf*normal);

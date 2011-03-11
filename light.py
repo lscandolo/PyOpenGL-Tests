@@ -1,5 +1,7 @@
 from cgkit.all import vec3
 from OpenGL.GL import glUniform3f, glUniform1f, glUniform1i, glGetUniformLocation
+from model import Model_Shadow_Texture,Cam
+from math import acos
 
 class Model_Ambient_Light(object):
     def __init__(self):
@@ -19,6 +21,18 @@ class Model_Spot_Light(object):
         self.ang_dimming = 2 #dimming factor as it faces away from a normal
         self.dist_dimming = 0.5 #linear dimming factor as the object is further
         self.specular_exponent = 32
+        self.generates_shadow_map = True
+        
+    def cam(self):
+        cam = Cam()
+        cam.pos = self.pos
+            
+    #!! Need to put an if for the case of dir = 0,0,1
+        rot_axis = self.dir.cross(vec3(0.,0.,1.)) 
+        angle = acos(vec3(self.dir[0],self.dir[1],0.).normalize() * self.dir.normalize())
+        cam.ori.fromAngleAxis(angle,rot_axis)
+        print cam.transf()
+        return cam
 
 class Light_Atlas():
     def __init__(self):
@@ -26,12 +40,17 @@ class Light_Atlas():
         self.spots = []
         self.dirs  = []
 
-    def new_spot_light(self):
+    def new_spot_light(self,generate_shadow_map = True, shadow_resolution = 500):
         if len(self.spots) > 9:
             return None
 
         uniform = 'spot_light[' + str(len(self.spots)) + ']'
         light = Model_Spot_Light(uniform)
+        light.generate_shadow_map = generate_shadow_map
+        if generate_shadow_map:
+            light.shadow_texture = Model_Shadow_Texture()
+            light.shadow_texture.allocate(shadow_resolution)
+
         self.spots.append(light)
         return self.spots[-1] # Last element
 

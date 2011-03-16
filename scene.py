@@ -12,6 +12,7 @@ class Scene(object):
         self.cam = Cam()
         self.cubemap = None
         self.active_program = None
+        self.frame_textures = 0
         self.time = 0.
         self.frames = 0
         self.shadowfb = ShadowFB()
@@ -77,8 +78,13 @@ class Scene(object):
                 self.drawSpotLightShadows(l)
 
     
+    #Attach default framebuffer and clear it
         self.shadowfb.unbind()
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+
+    #Reset texture unit count
+        # self.frame_textures = 0
+
     #Draw cubemap 
         if self.cubemap != None:
             self.drawCubemap()
@@ -87,9 +93,6 @@ class Scene(object):
     #Set shaders
         glUseProgram(self.active_program)
             
-    #Setup light uniforms
-        self.lights.setup(self)
-
     #Draw Objects
         for obj in self.models:
             self.drawObject(obj)
@@ -97,7 +100,7 @@ class Scene(object):
     #Swap buffer
         glutSwapBuffers()
 
-    #Frame computation
+    #FPS computation
         self.frames += 1
         time = glutGet(GLUT_ELAPSED_TIME)/1000
         if time > self.time + 1:
@@ -113,13 +116,13 @@ class Scene(object):
             print 'Error drawing spotlight: Problem generating framebuffer'
             return
     # Draw Objects
-
         glClear(GL_DEPTH_BUFFER_BIT)
         cam = l.cam()
         for obj in self.models:
             self.drawObjectShadow(obj,cam)
         self.shadowfb.unbind()
         glUseProgram(self.active_program)
+        glBindFramebuffer(GL_FRAMEBUFFER, 0)
 
     def drawCubemap(self):
         self.cubemap.use_program()
@@ -139,6 +142,9 @@ class Scene(object):
                 self.drawObject(model, new_transf)
         elif type(obj) is Model_Object:
 
+        #Reset the texture count
+            self.frame_textures = 0
+            
         #Set mv transform
             modelview =  cam.transf() * transf * obj.props.transf()
 
@@ -166,6 +172,9 @@ class Scene(object):
 
         #Setup material uniforms
             obj.material.setup(self)
+
+        #Setup light uniforms
+            self.lights.setup(self)
 
         #Setup object buffers
             obj.setup(self.active_program)

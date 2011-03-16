@@ -1,5 +1,7 @@
-from cgkit.all import vec3
-from OpenGL.GL import glUniform3f, glUniform1f, glUniform1i, glGetUniformLocation
+from cgkit.all import vec3,quat
+# from OpenGL.GL import glUniform3f, glUniform1f, glUniform1i, glGetUniformLocation
+# from OpenGL.GL import  glActiveTexture, GL_TEXTURE0, glBindTexture, GL_TEXTURE_2D,glTexParameteri
+from OpenGL.GL import *
 from model import Model_Shadow_Texture,Cam
 from math import acos
 
@@ -12,13 +14,13 @@ class Model_Ambient_Light(object):
 class Model_Spot_Light(object):
     def __init__(self,uniform):
         self.uniform = uniform
-        self.intensity = 1
-        self.color = vec3(1.0,1.0,1.0)
-        self.pos = vec3(0,0,0)
-        self.dir = vec3(0,0,1)
-        self.aperture = 1 #half angle of aperture
-        self.reach   = 1 #maximum reach
-        self.ang_dimming = 2 #dimming factor as it faces away from a normal
+        self.intensity = 1.
+        self.color = vec3(1.,1.,1.)
+        self.pos = vec3(0.,0.,0.)
+        self.dir = vec3(0.,0.,1.)
+        self.aperture = 1. #half angle of aperture
+        self.reach   = 1. #maximum reach
+        self.ang_dimming = 2. #dimming factor as it faces away from a normal
         self.dist_dimming = 0.5 #linear dimming factor as the object is further
         self.specular_exponent = 32
         self.generates_shadow_map = True
@@ -27,11 +29,16 @@ class Model_Spot_Light(object):
         cam = Cam()
         cam.pos = self.pos
             
-    #!! Need to put an if for the case of dir = 0,0,1
-        rot_axis = self.dir.cross(vec3(0.,0.,1.)) 
-        angle = acos(vec3(self.dir[0],self.dir[1],0.).normalize() * self.dir.normalize())
+        if self.dir.normalize() == vec3(0.,0.,1.):
+            rot_axis = vec3(1.,0.,0.)
+            cos_alpha = vec3(0.,self.dir[1],self.dir[2]).normalize() * vec3(1.,0.,0.)
+            angle = acos(cos_alpha)
+        else:
+            rot_axis = self.dir.cross(vec3(0.,0.,1.)).normalize()
+            cos_alpha = vec3(self.dir[0],self.dir[1],0.).normalize() * self.dir.normalize()
+            angle = acos(cos_alpha)
+
         cam.ori.fromAngleAxis(angle,rot_axis)
-        print cam.transf()
         return cam
 
 class Light_Atlas():
@@ -68,6 +75,7 @@ class Light_Atlas():
         
         loc = glGetUniformLocation(program,'spot_light_count')
         glUniform1i(loc,len(self.spots));
+        print 'spot_light_count(loc' + str(loc) + ') =', len(self.spots)
 
         for l in self.spots:
             loc = glGetUniformLocation(program,l.uniform + '.color')
@@ -96,5 +104,29 @@ class Light_Atlas():
 
             loc = glGetUniformLocation(program,l.uniform + '.direction')
             glUniform3f(loc,l.dir[0],l.dir[1],l.dir[2])
-            
-            
+
+            loc = glGetUniformLocation(program,l.uniform + '.has_shadow_map')
+            if l.generates_shadow_map:
+                glUniform1i(loc,1)
+            else:
+                glUniform1i(loc,0)
+                
+            glActiveTexture(GL_TEXTURE0+scene.frame_textures)
+            glBindTexture(GL_TEXTURE_2D, l.shadow_texture.location)
+
+            glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER,GL_NEAREST)
+            glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,GL_NEAREST)
+            glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+            glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+            glTexParameteri(GL_TEXTURE_2D, GL_DEPTH_TEXTURE_MODE, GL_LUMINANCE)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, 
+                            GL_COMPARE_R_TO_TEXTURE)
+
+            tex_loc = glGetUniformLocation(program,l.uniform + '.shadow_map')
+            glUniform1i(tex_loc,scene.frame_textures)
+            print l.uniform + '.shadow_map uniform location:', tex_loc
+            print l.uniform + '.shadow_map TIU number:', scene.frame_textures
+            print l.uniform + '.shadow_map texture location:', l.shadow_texture.location
+            glActiveTexture(GL_TEXTURE0) #Probably useless
+            scene.frame_textures += 1            

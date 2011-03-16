@@ -14,7 +14,6 @@ class Cubemap:
         self.texture = None
         self.vertex_shader = None
         self.fragment_shader = None
-        # self.active_texture = GL_TEXTURE0
         self.cubemap_sampler_name = None
         self.pos_attr_name = None
         self.rot_transf_name = None
@@ -113,16 +112,8 @@ class Cubemap:
             print "Error: No cubemap sampler name defined"
             return False
 
-        # glActiveTexture(self.active_texture)
-
         glBindBuffer(GL_ARRAY_BUFFER,self.cubemap_pos_buf)
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,self.cubemap_elem_buf)
-
-        # glBindTexture(GL_TEXTURE_CUBE_MAP,self.texture.location)
-
-        # cubemap_sampler = glGetUniformLocation(self.program,
-        #                                        self.cubemap_sampler_name)
-        # glUniform1i(cubemap_sampler,0)
 
         pos_attr_loc = glGetAttribLocation(self.program,self.pos_attr_name)
         glEnableVertexAttribArray(pos_attr_loc)

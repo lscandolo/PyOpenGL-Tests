@@ -170,7 +170,6 @@ class Model_Material():
         return names
 
     def setup(self,scene):
-        current_texture = 1;
         samplers2d = scene.textures.samplers2d
         samplersCM = scene.textures.samplersCM
         program = scene.active_program
@@ -207,39 +206,50 @@ class Model_Material():
                 loc = glGetUniformLocation(program,name + '.set')
                 glUniform1i(loc, 0)
                 loc = glGetUniformLocation(program,name + '.tex')
-                glUniform1i(loc, 0)
-                continue
-        
-            loc = glGetUniformLocation(program,name + '.set')
-            glUniform1i(loc, 1)
+                glUniform1i(loc, scene.frame_textures)
+                scene.frame_textures += 1
 
-            loc = glGetUniformLocation(program,name + '.rotation')
-            glUniform1f(loc, texmap.rotation)
-            
-            loc = glGetUniformLocation(program,name + '.percent')
-            glUniform1f(loc, texmap.percent)
+            else:
 
-            loc = glGetUniformLocation(program,name + '.offset')
-            glUniform2f(loc, texmap.offset[0],texmap.offset[1])
+                loc = glGetUniformLocation(program,name + '.set')
+                print name, 'set uniform location:', loc
+                glUniform1i(loc, 1)
 
-            loc = glGetUniformLocation(program,name + '.scale')
-            glUniform2f(loc, texmap.scale[0],texmap.scale[1])
+                loc = glGetUniformLocation(program,name + '.rotation')
+                print name, 'rotation uniform location:', loc
+                glUniform1f(loc, texmap.rotation)
+                
+                loc = glGetUniformLocation(program,name + '.percent')
+                print name, 'percent uniform location:', loc
+                glUniform1f(loc, texmap.percent)
+                
+                loc = glGetUniformLocation(program,name + '.offset')
+                print name, 'offset uniform location:', loc
+                glUniform2f(loc, texmap.offset[0],texmap.offset[1])
+                
+                loc = glGetUniformLocation(program,name + '.scale')
+                print name, 'scale uniform location:', loc
+                glUniform2f(loc, texmap.scale[0],texmap.scale[1])
 
-            glActiveTexture(GL_TEXTURE0+current_texture)
-            loc = glGetUniformLocation(program,name + '.tex')
-            texture = samplers2d[texmap.name]
-            texture.bind()
+                glActiveTexture(GL_TEXTURE0+scene.frame_textures)
+                loc = glGetUniformLocation(program,name + '.tex')
+                texture = samplers2d[texmap.name]
 
-            glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S,texmap.wrap_s)
-            glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T,texmap.wrap_t)
-            glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER,texmap.mag_filter)
-            glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,texmap.min_filter)
-            glTexParameterf( GL_TEXTURE_2D,  GL_TEXTURE_MAX_ANISOTROPY_EXT,
-                             texmap.max_anisotropy)
+                texture.bind()
 
+                glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S,texmap.wrap_s)
+                glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T,texmap.wrap_t)
+                glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER,texmap.mag_filter)
+                glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,texmap.min_filter)
+                glTexParameterf( GL_TEXTURE_2D,  GL_TEXTURE_MAX_ANISOTROPY_EXT,
+                                 texmap.max_anisotropy)
 
-            glUniform1i(loc, current_texture)
-            current_texture += 1
+                print name, 'uniform location:', loc
+                print name, 'TIU number:', scene.frame_textures
+                print name, 'texture location:', texture.location
+                glUniform1i(loc, scene.frame_textures)
+                glActiveTexture(GL_TEXTURE0) #Probably useless
+                scene.frame_textures += 1
 
     #If the shader declares and (possibly) uses a cubemap it MUST be set
 
@@ -249,7 +259,7 @@ class Model_Material():
             name = texmap.uniform
             loc = glGetUniformLocation(program,name + '.set')
             sampler_loc = glGetUniformLocation(program,name + '.tex')
-            glActiveTexture(GL_TEXTURE0+current_texture)
+            glActiveTexture(GL_TEXTURE0+scene.frame_textures)
 
         #If a cubemap is declared, any cubemap MUST be set, so we set a default one
             if not texmap.set: 
@@ -266,8 +276,9 @@ class Model_Material():
                 texture = samplersCM[texmap.name]
             
             texture.bind()
-            glUniform1i(sampler_loc, current_texture)
-            current_texture += 1
+            glUniform1i(sampler_loc, scene.frame_textures)
+            glActiveTexture(GL_TEXTURE0) #Probably useless
+            scene.frame_textures += 1
         
 
 class Model_Texture_Map():
@@ -383,6 +394,9 @@ class Model_Texture():
         glBindTexture(GL_TEXTURE_2D, self.location)
         glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE)
 
+    def unbind(self):
+        glBindTexture(GL_TEXTURE_2D, 0)
+
 class Model_Shadow_Texture():
     def __init__(self):
         self.location = 0
@@ -391,16 +405,16 @@ class Model_Shadow_Texture():
         self.location = glGenTextures(1)
         glBindTexture(GL_TEXTURE_2D,self.location)
         data = numpy.ndarray((resolution,resolution),dtype='uint32',order='C')
-        glBindTexture(GL_TEXTURE_2D,self.location)
+
+        glTexImage2Dui(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32, 0, GL_DEPTH_COMPONENT, data)
+
         glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S,
                          GL_REPEAT )
         glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T,
                          GL_REPEAT )
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
 
-        data = numpy.ndarray(shape=(640,480),dtype='uint32',order='C')
-        glTexImage2Dui(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32, 0, GL_DEPTH_COMPONENT, data)
 
 class Model_Cubemap_Texture():
     def __init__(self):
@@ -529,9 +543,9 @@ class Cam:
         trans = mat4.translation([-self.pos.x, -self.pos.y, -self.pos.z])
         return rot * trans
 
-        # rM = mat4.rotation(self.rpy[0],(0.,0.,1.))
-        # pM = mat4.rotation(self.rpy[1],(-1.,0.,0.))
-        # yM = mat4.rotation(self.rpy[2],(0.,1.,0.))
+        # rM = mat4.rotation(self.rpy[0],( 0., 0., 1.))
+        # pM = mat4.rotation(self.rpy[1],(-1., 0., 0.))
+        # yM = mat4.rotation(self.rpy[2],( 0., 1., 0.))
         # return  rM * pM * yM * tM
 
     def rotTransf(self):

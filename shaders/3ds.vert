@@ -1,5 +1,4 @@
 // 3ds materials vertex shader
-
 #version 140
 
 uniform mat4 in_Modelview;

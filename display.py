@@ -151,34 +151,33 @@ def main():
     scene.initShadowFB()
 
     floor_index = scene.loadObjModel('models/floor.obj')
-    # teapot_index = scene.loadObjModel('models/teapot.obj')
-    # teapot_index = scene.loadObjModel('models/teapot-low_res.obj')
+    teapot_index = scene.loadObjModel('models/teapot.obj')
 
-    # if floor_index or teapot_index == None:
-    #     print 'Error loading model'
-    #     exit(-1)
+    if floor_index or teapot_index == None:
+        print 'Error loading model'
+        exit(-1)
 
     floor = scene.models[floor_index]
-    # teapot = scene.models[teapot_index]
+    teapot = scene.models[teapot_index]
 
     floor.props.pos = vec3(0,-0.5,3)
     floor.props.scale = vec3(1)
 
-    # for m in teapot.models:
-    #     m.material.ambient = vec4(0.4,0.3,1,1)
-    #     tm = m.material.texture1_map
-    #     nm = m.material.normal_map
-    #     hm = m.material.height_map
-    #     tm.name = 'textures/masonry_wall-texture.jpg'
-    #     hm.name = 'textures/masonry_wall-height_map.jpg'
-    #     nm.name = 'textures/masonry_wall-normal_map.jpg'
-    #     sc = 4
-    #     tm.scale = (sc,sc)
-    #     hm.scale = (sc,sc)
-    #     nm.scale = (sc,sc)
-    #     tm.set = True
-    #     hm.set = True
-    #     nm.set = True
+    for m in teapot.models:
+        m.material.ambient = vec4(0.4,0.3,1,1)
+        tm = m.material.texture1_map
+        nm = m.material.normal_map
+        hm = m.material.height_map
+        tm.name = 'textures/masonry_wall-texture.jpg'
+        hm.name = 'textures/masonry_wall-height_map.jpg'
+        nm.name = 'textures/masonry_wall-normal_map.jpg'
+        sc = 4
+        tm.scale = (sc,sc)
+        hm.scale = (sc,sc)
+        nm.scale = (sc,sc)
+        tm.set = True
+        hm.set = True
+        nm.set = False
 
     for m in floor.models:
         m.material.bump_height = 0.015
@@ -226,8 +225,8 @@ def main():
     scene.lights.ambient.intensity = 0.6
 
     spot_light = scene.lights.new_spot_light()
-    spot_light.pos = vec3(0,3,0)
-    spot_light.dir = vec3(0,-1,0)
+    spot_light.pos = vec3(0,3,-1)
+    spot_light.dir = vec3(0,-1,1).normalize()
     spot_light.reach = 10
     spot_light.dist_dimming = 0.5
     spot_light.ang_dimming = 0.5
@@ -237,58 +236,6 @@ def main():
 
     screen = Screen()
     screen.size = screen_size
-
-
-
-    # glBindFramebuffer(a)
-    shadow_texture = glGenTextures(1)
-    glBindTexture(GL_TEXTURE_2D,shadow_texture)
-    glTexEnvf( GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE )
-    glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S,
-                     GL_REPEAT )
-    glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T,
-                     GL_REPEAT )
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
-
-    data = numpy.ndarray(shape=(640,480),dtype='uint32',order='C')
-    glTexImage2Dui(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32, 0, GL_DEPTH_COMPONENT, data)
-    
-
-    a = glGenFramebuffers(1)
-    glBindFramebuffer(GL_FRAMEBUFFER, a)
-    # glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
-    #                        GL_TEXTURE_2D, shadow_texture, 0)
-    
-    
-
-    # Gen renderbuffer
-    myRB = glGenRenderbuffers(1)
-
-    # Bind renderbuffer
-    glBindRenderbuffer(GL_RENDERBUFFER, myRB)
-
-    # Init as a depth buffer
-    glRenderbufferStorage( GL_RENDERBUFFER, GL_DEPTH_COMPONENT32, 
-                           screen.size[0], screen.size[1])
-
-    # Attach to the FBO for depth
-    # glFramebufferRenderbuffer( GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, 
-    #                               GL_RENDERBUFFER, myRB);
-    
-    #Attach texture for depth
-    glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER,GL_DEPTH_ATTACHMENT,
-                           GL_TEXTURE_2D,shadow_texture,0)
-
-    glBindRenderbuffer(GL_RENDERBUFFER, myRB)
-
-    #Don't write anything to color attachments
-    bdata = numpy.array([GL_NONE],dtype='uint32')
-    glDrawBuffers(bdata)
-    
-    glBindRenderbuffer(GL_RENDERBUFFER, 0)
-    glBindFramebuffer(GL_FRAMEBUFFER, 0)
-
 
     glutDisplayFunc(lambda : scene.drawScene())
     glutIdleFunc(lambda : scene.drawScene())

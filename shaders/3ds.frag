@@ -1,4 +1,4 @@
-#version 140
+#version 330
 
 /* ------------------- Matrices  -----------------------------*/
 uniform mat4 in_Modelview;
@@ -70,6 +70,8 @@ struct SpotLight{
   float dist_dimming;
   float ang_dimming;
   int   specular_exponent;
+  bool  has_shadow_map;
+  sampler2DShadow shadow_map; 
 };
 
 uniform AmbientLight ambient_light;
@@ -150,35 +152,37 @@ void main(void)
   self_ilpct = mat_self_ilpct;
   transparency = mat_transparency;
 
+  vec2 tex_coords =  ex_TexCoord;
   vec3 normal = ex_Normal;
 
-  ////--------------------Parallax Mapping
+  ////--------------------Parallax Mapping if we have a height map
+  /* if (false){ */
+  if (height_map.set){
+    float height_factor = mat_bump_height;
+    float bias_factor = mat_bump_bias;
+    float h;
+    int iterations = 3;
+    vec2 parallax = -normalize(tbnView).xy;
+    tex_coords =  tex_coords(height_map,ex_TexCoord);
 
-  float height_factor = mat_bump_height;
-  float bias_factor = mat_bump_bias;
-  float h;
+    //We iterate to get higher accuracy
+    for (; iterations > 0; iterations--){
+      h = texture(height_map.tex,tex_coords.xy).x;
+      h = (h - bias_factor) * height_factor;
+      tex_coords += (h * parallax);
+    }
 
-  int iterations = 3;
-  vec2 parallax = -normalize(tbnView).xy;
-  vec2 tex_coords =  tex_coords(height_map,ex_TexCoord);
-
-  //We iterate to get higher accuracy
-  for (; iterations > 0; iterations--){
-    h = texture2D(height_map.tex,tex_coords.xy).x;
-    h = (h - bias_factor) * height_factor;
-    tex_coords += (h * parallax)/* /pllxOffset.z */;
   }
-
 
   //// Color Texture retrieval
   if (texture1_map.set){
-    ambient = texture2D(texture1_map.tex,tex_coords).xyz * texture1_map.percent;
+    ambient = texture(texture1_map.tex,tex_coords).xyz * texture1_map.percent;
     diffuse = ambient;
   }
 
   ////////// Normal mapping
   if (normal_map.set){
-    normal =  texture2D(normal_map.tex,tex_coords.xy).xyz - vec3(0.5,0.5,0.5);
+    normal =  texture(normal_map.tex,tex_coords).xyz - vec3(0.5,0.5,0.5);
     normal = mat3(ex_Tangent,ex_Bitangent,ex_Normal) * normal;
     normal = normalize(normal);
   }
@@ -202,11 +206,17 @@ void main(void)
   ambient_color *= ambient;
   vec3 color = spot_color + ambient_color;
 
+  /* float md = shadow2D(spot_light[0].shadow_map,vec3(ex_TexCoord,1)).x; */
+  /* float md = texture(spot_light[0].shadow_map,ex_TexCoord).x; */
+  /* float md = spot_light[0].direction.x; */
+  float md = textureProj(spot_light[0].shadow_map,vec4(ex_TexCoord,0.5,0.5));
+  color = vec3(md,md,md);
+
   gl_FragColor = vec4(color,transparency);
   gl_FragDepth = gl_FragCoord.z;
 
-
 }
+
 
 /* There are advanced techniques for */
 /* smooth shadows */

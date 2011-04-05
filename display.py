@@ -195,9 +195,9 @@ def main():
         tm.scale = (sc,sc)
         hm.scale = (sc,sc)
         nm.scale = (sc,sc)
-        tm.set = True
-        hm.set = True
-        nm.set = True
+        tm.set = False
+        hm.set = False
+        nm.set = False
 
     for m in floor.models:
         m.material.bump_height = 0.015
@@ -215,9 +215,9 @@ def main():
         tm.scale = (sc,sc)
         hm.scale = (sc,sc)
         nm.scale = (sc,sc)
-        tm.set = True
-        hm.set = True
-        nm.set = True
+        tm.set = False
+        hm.set = False
+        nm.set = False
 
         # sm = m.material.shininess_map
         # sm.name = 'textures/brickwork-bump_map.jpg'

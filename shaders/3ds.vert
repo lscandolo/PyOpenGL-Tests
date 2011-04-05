@@ -1,10 +1,11 @@
 // 3ds materials vertex shader
-#version 140
+#version 330
 
 uniform mat4 in_Modelview;
 uniform mat4 in_ModelviewInv;
 uniform mat4 in_Projection;
 uniform mat4 in_View;
+uniform mat4 in_ViewInv;
 
 in  vec3 in_Position;
 in  vec3 in_Normal;

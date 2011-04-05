@@ -212,23 +212,23 @@ class Model_Material():
             else:
 
                 loc = glGetUniformLocation(program,name + '.set')
-                print name, 'set uniform location:', loc
+                # print name, 'set uniform location:', loc
                 glUniform1i(loc, 1)
 
                 loc = glGetUniformLocation(program,name + '.rotation')
-                print name, 'rotation uniform location:', loc
+                # print name, 'rotation uniform location:', loc
                 glUniform1f(loc, texmap.rotation)
                 
                 loc = glGetUniformLocation(program,name + '.percent')
-                print name, 'percent uniform location:', loc
+                # print name, 'percent uniform location:', loc
                 glUniform1f(loc, texmap.percent)
                 
                 loc = glGetUniformLocation(program,name + '.offset')
-                print name, 'offset uniform location:', loc
+                # print name, 'offset uniform location:', loc
                 glUniform2f(loc, texmap.offset[0],texmap.offset[1])
                 
                 loc = glGetUniformLocation(program,name + '.scale')
-                print name, 'scale uniform location:', loc
+                # print name, 'scale uniform location:', loc
                 glUniform2f(loc, texmap.scale[0],texmap.scale[1])
 
                 glActiveTexture(GL_TEXTURE0+scene.frame_textures)
@@ -244,9 +244,9 @@ class Model_Material():
                 glTexParameterf( GL_TEXTURE_2D,  GL_TEXTURE_MAX_ANISOTROPY_EXT,
                                  texmap.max_anisotropy)
 
-                print name, 'uniform location:', loc
-                print name, 'TIU number:', scene.frame_textures
-                print name, 'texture location:', texture.location
+                # print name, 'uniform location:', loc
+                # print name, 'TIU number:', scene.frame_textures
+                # print name, 'texture location:', texture.location
                 glUniform1i(loc, scene.frame_textures)
                 glActiveTexture(GL_TEXTURE0) #Probably useless
                 scene.frame_textures += 1
@@ -371,23 +371,13 @@ class Model_Texture():
         buf = numpy.array(texdata,dtype='uint8',order='C')
         buf_shape = (im.size[0],im.size[1],3)
         data = numpy.reshape(buf,buf_shape,order='C')
-        # data = ndarray(shape=buf_shape, buffer=buf,dtype="uint8",order='C')
 
-        # valiter = texdata.__iter__()
-        # for i in range(0,buf_shape[0]):
-        #     for j in range(0,buf_shape[1]):
-        #         for k in range(0,buf_shape[2]):
-        #             try:
-        #                 data.itemset((i,j,k),valiter.next())
-        #             except StopIteration:
-        #                 print '(i,j,k)', i,j,k
-        #                 break
-        
         glTexImage2Dub(GL_TEXTURE_2D, 0, 3, 0, GL_RGB, data)
         
         if self.create_mipmap:
             glGenerateMipmap(GL_TEXTURE_2D)
 
+        glBindTexture(GL_TEXTURE_2D,0)
         return True
 
     def bind(self):
@@ -403,18 +393,27 @@ class Model_Shadow_Texture():
 
     def allocate(self,resolution):
         self.location = glGenTextures(1)
-        glBindTexture(GL_TEXTURE_2D,self.location)
-        data = numpy.ndarray((resolution,resolution),dtype='uint32',order='C')
+        self.bind()
 
+        data = numpy.zeros((resolution,resolution),dtype='uint32',order='C')
         glTexImage2Dui(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32, 0, GL_DEPTH_COMPONENT, data)
 
-        glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S,
-                         GL_REPEAT )
-        glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T,
-                         GL_REPEAT )
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
+        glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER,GL_NEAREST)
+        glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,GL_NEAREST)
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+        self.unbind()
 
+    def bind(self):
+        glBindTexture(GL_TEXTURE_2D, self.location)
+        glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE)
+        glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER,GL_NEAREST)
+        glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,GL_NEAREST)
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+
+    def unbind(self):
+        glBindTexture(GL_TEXTURE_2D, 0)
 
 class Model_Cubemap_Texture():
     def __init__(self):
@@ -442,7 +441,6 @@ class Model_Cubemap_Texture():
         glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R,GL_CLAMP_TO_EDGE);
         glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAX_ANISOTROPY_EXT,
                         self.max_anisotropy)
-
 
         if self.tex_xpos == None or \
            self.tex_ypos == None or \

@@ -25,12 +25,13 @@ frames = 0
 def vbo_offset(offset):
     return ctypes.c_void_p(offset * 4)
 
-def reshape(w,h,screen):
+def reshape(w,h,scene):
     glViewport(0,0,w,h)
-    screen.size = (w,h)
+    scene.screen.size = (w,h)
+    scene.cam.projTransf = mat4().perspective(50.,w/float(h),0.01,100)
 
-def mouseFunc(x,y,scene,screen):
-    (w,h) = screen.size
+def mouseFunc(x,y,scene):
+    (w,h) = scene.screen.size
     delta = 0.01
     az_delta  = delta * float(w/2-x)
     inc_delta = delta * float(h/2-y)
@@ -72,6 +73,21 @@ def keyPressed(key,x,y,scene):
 
             
     light = scene.lights.spots[0]
+    model = scene.models[1]
+
+    if key == 't':
+        model.props.pos.x += 0.1
+    if key == 'r':
+        model.props.pos.x -= 0.1
+    if key == 'g':
+        model.props.pos.z += 0.1
+    if key == 'f':
+        model.props.pos.z -= 0.1
+    if key == 'b':
+        model.props.pos.y += 0.1
+    if key == 'v':
+        model.props.pos.y -= 0.1
+
     if key == 'h':
         light.pos.x += 0.1
     if key == 'k':
@@ -118,13 +134,12 @@ def initShaders(v_filename, f_filename):
     glUseProgram(program)
     return program
 
-def startOpengl():
+def startOpengl(w,h):
     glutInit(sys.argv)
     # glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH | GLUT_MULTISAMPLE)
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH )
     glutInitWindowPosition(100,100)
-    glutInitWindowSize(500,500)
-    screen_size = (500,500)
+    glutInitWindowSize(w,h)
     glutCreateWindow("TRY")
     glClearColor(0.0,0.0,0.0,0.0)
     glClearDepth(1.0)
@@ -135,19 +150,24 @@ def startOpengl():
     glEnable(GL_TEXTURE_2D)
     glEnable(GL_TEXTURE_CUBE_MAP)
 
+    # print glGetString(GL_VERSION)
+    # print glGetString(GL_VENDOR)
+    # print glGetString(GL_EXTENSIONS)
+    # print glGetString(GL_SHADING_LANGUAGE_VERSION)
+
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
     glutSwapBuffers()
-    return screen_size
 
 def main():
 
-    screen_size = startOpengl()
-    program = initShaders("shaders/3ds.vert", "shaders/3ds.frag")
-    # program = initShaders("shaders/parallax.vert", "shaders/parallax.frag")
-    # program = initShaders("shaders/relief.vert", "shaders/relief.frag")
-
     scene = Scene()
-    scene.active_program = program
+    scene.screen.size = (500,400)
+    startOpengl(scene.screen.size[0],scene.screen.size[1])
+
+    scene.active_program = initShaders("shaders/3ds.vert", "shaders/3ds.frag")
+    # scene.active_program = initShaders("shaders/parallax.vert", "shaders/parallax.frag")
+    # scene.active_program = initShaders("shaders/relief.vert", "shaders/relief.frag")
+
     scene.initShadowFB()
 
     floor_index = scene.loadObjModel('models/floor.obj')
@@ -164,7 +184,7 @@ def main():
     floor.props.scale = vec3(1)
 
     for m in teapot.models:
-        m.material.ambient = vec4(0.4,0.3,1,1)
+        m.material.ambient = vec4(1,0.2,0.2,1)
         tm = m.material.texture1_map
         nm = m.material.normal_map
         hm = m.material.height_map
@@ -177,10 +197,11 @@ def main():
         nm.scale = (sc,sc)
         tm.set = True
         hm.set = True
-        nm.set = False
+        nm.set = True
 
     for m in floor.models:
         m.material.bump_height = 0.015
+        m.material.ambient = vec4(0.8,0.8,1,1)
 
         tm = m.material.texture1_map
         nm = m.material.normal_map
@@ -224,25 +245,28 @@ def main():
 
     scene.lights.ambient.intensity = 0.6
 
-    spot_light = scene.lights.new_spot_light()
+    # spot_light = scene.lights.new_spot_light()
+    # spot_light.pos = vec3(0,5,0)
+    # spot_light.dir = vec3(0,-1,0).normalize()
+    # spot_light.reach = 10
+    # spot_light.dist_dimming = 0.5
+    # spot_light.ang_dimming = 0.5
+    # spot_light.color = vec3(1,1,1)
+
+    spot_light = scene.new_spot_light()
     spot_light.pos = vec3(0,3,-1)
     spot_light.dir = vec3(0,-1,1).normalize()
-    spot_light.reach = 10
+    spot_light.reach = 20
     spot_light.dist_dimming = 0.5
     spot_light.ang_dimming = 0.5
     spot_light.color = vec3(1,1,1)
 
-    print scene.lights.spots
-
-    screen = Screen()
-    screen.size = screen_size
-
     glutDisplayFunc(lambda : scene.drawScene())
     glutIdleFunc(lambda : scene.drawScene())
-    glutReshapeFunc(lambda w,h: reshape(w,h,screen))
+    glutReshapeFunc(lambda w,h: reshape(w,h,scene))
 
     glutKeyboardFunc(lambda key,x,y : keyPressed(key,x,y,scene))
-    glutMotionFunc(lambda x,y : mouseFunc(x,y,scene,screen))
+    glutMotionFunc(lambda x,y : mouseFunc(x,y,scene))
     # glutPassiveMotionFunc(lambda x,y : mouseFunc(x,y,scene,screen_size))
 
     glutWarpPointer(250,250)

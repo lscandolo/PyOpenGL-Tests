@@ -4,6 +4,7 @@
 uniform mat4 in_Modelview;
 uniform mat4 in_ModelviewInv;
 uniform mat4 in_View;
+uniform mat4 in_ViewInv;
 uniform mat4 in_Projection;
 
 /* --------------------- Geometry data --------------------*/
@@ -65,17 +66,20 @@ struct SpotLight{
   vec3  color;
   vec3  position;
   vec3  direction;
+  mat4  transf;
   float reach;
   float aperture;
   float dist_dimming;
   float ang_dimming;
   int   specular_exponent;
   bool  has_shadow_map;
-  sampler2DShadow shadow_map; 
+  /* sampler2D shadow_map; */
+  bool set;
 };
 
 uniform AmbientLight ambient_light;
-uniform SpotLight    spot_light[10];
+uniform SpotLight    spot_light[5];
+uniform sampler2DShadow    shadow_maps[10];
 uniform int          spot_light_count;
 
 
@@ -92,13 +96,38 @@ vec2 tex_coords(TextureMap map, vec2 coords){
   return tex_scale(map.scale)*tex_rot(map.rotation)*(coords-map.offset);
 }
 
-const float minreach = 0.01;
+const float minreach = 0.1;
 
 /* ----------------  Lighting functions  --------------------- */
-vec3 reflected_light(vec3 f_col, vec3 f_pos, vec3 f_nor, 
-		     float shininess, int i){
+vec3 reflected_light(vec3 f_col, vec3 f_pos, vec3 f_nor,
+		     float shininess, int j){ // Change j to i!
 
+  const int i = 0;
   vec3 final_color = vec3(0,0,0);
+
+
+  if (!spot_light[i].set)
+    return final_color;
+
+  if (spot_light[i].has_shadow_map){
+
+    vec4 cam_pos = spot_light[0].transf * in_ViewInv * vec4(ex_Position,1.0);
+    vec3 shadow_coord = cam_pos.xyz / cam_pos.w;
+    shadow_coord = shadow_coord/2.f + vec3(0.5f,0.5f,0.5f);
+    shadow_coord.z -= 0.001f;
+
+    float res = 0;
+    if (shadow_coord.x >= 0.f && shadow_coord.x <= 1.f &&
+	shadow_coord.y >= 0.f && shadow_coord.y <= 1.f
+	&& shadow_coord.z >= 0.f && shadow_coord.z <= 1.f)
+      {
+	res += texture(shadow_maps[0],shadow_coord);
+      }
+
+  
+    if (res == 1.f)
+      return final_color;
+  }
 
   vec3 l_pos = (in_View * vec4(spot_light[i].position,1)).xyz;
   vec3 l_dir = normalize(mat3(in_View) * spot_light[i].direction).xyz;
@@ -115,8 +144,8 @@ vec3 reflected_light(vec3 f_col, vec3 f_pos, vec3 f_nor,
 
   float ang_dim = pow(lf_cosang-cos(spot_light[i].aperture),spot_light[i].ang_dimming);
 
-  float dist_dim = 
-    min(1,spot_light[i].reach - lf_dist / (spot_light[i].reach - minreach));
+  float dist_dim =
+    min(1,(spot_light[i].reach - lf_dist) / (spot_light[i].reach - minreach));
   
   float diffuse_strength = dot(f_nor,-lf_dir);
   if (diffuse_strength < 0) return final_color;
@@ -132,6 +161,29 @@ vec3 reflected_light(vec3 f_col, vec3 f_pos, vec3 f_nor,
   final_color *= ang_dim*dist_dim*spot_light[i].intensity;
   return final_color;
 }
+
+/* bool spot_hits_frag(int l){ */
+
+/*   if (!spot_light[l].has_shadow_map) */
+/*     return true; */
+
+/*   vec4 cam_pos = spot_light[l].transf * in_ViewInv * vec4(ex_Position,1.0); */
+/*   vec3 shadow_coord = cam_pos.xyz / cam_pos.w; */
+/*   shadow_coord = shadow_coord/2.f + vec3(0.5f,0.5f,0.5f); */
+/*   shadow_coord.z -= 0.001f; */
+
+/*   if (!(shadow_coord.x >= 0.f && shadow_coord.x <= 1.f && */
+/* 	shadow_coord.y >= 0.f && shadow_coord.y <= 1.f  */
+/* 	&& shadow_coord.z >= 0.f && shadow_coord.z <= 1.f)) */
+/*     return false; */
+    
+/*   float res; */
+/*     res = texture(shadow_maps[l],shadow_coord); */
+
+/*   return (res > 0); */
+/* } */
+
+
 
 /* -------------------------------- main -----------------------------*/
 void main(void)
@@ -195,22 +247,18 @@ void main(void)
     diffuse = ambient;
   }
 
-  /////// Lighting computation
-  vec3 spot_color = vec3(0.f);
-  for (int l = 0; l < spot_light_count; l++){
-    spot_color += reflected_light(diffuse, ex_Position, normal, shininess,l);
-  }
-
   ////// Color adjusting
   vec3 ambient_color = ambient_light.intensity * normalize(ambient_light.color);
   ambient_color *= ambient;
-  vec3 color = spot_color + ambient_color;
 
-  /* float md = shadow2D(spot_light[0].shadow_map,vec3(ex_TexCoord,1)).x; */
-  /* float md = texture(spot_light[0].shadow_map,ex_TexCoord).x; */
-  /* float md = spot_light[0].direction.x; */
-  float md = textureProj(spot_light[0].shadow_map,vec4(ex_TexCoord,0.5,0.5));
-  color = vec3(md,md,md);
+  /////// Lighting computation
+  vec3 spot_color = vec3(0.f);
+  for (int l = 0; l < 1; l++){ // Change 1 to spot_light_count!
+    spot_color += reflected_light(diffuse, ex_Position, normal, shininess,l);
+  }
+
+  vec3 color = ambient_color;
+  color += spot_color;
 
   gl_FragColor = vec4(color,transparency);
   gl_FragDepth = gl_FragCoord.z;
@@ -227,3 +275,4 @@ void main(void)
 /* VSMs, layered VSMs, CSMs, ESMs, ACDF SMs */
 /* Can be combined with SATs for arbitary */
 /* smoothness */
+

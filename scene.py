@@ -16,6 +16,8 @@ class Scene(object):
         self.time = 0.
         self.frames = 0
         self.shadowfb = ShadowFB()
+        self.screen = Screen()
+        self.shadow_map_resolution = 512
 
     def load3dsModel(self,filename):
         model = load3ds(filename)
@@ -69,21 +71,18 @@ class Scene(object):
         return self.cubemap.set_textures(xp,xn,yp,yn,zp,zn)
 
     def initShadowFB(self):
-        self.shadowfb.allocate()
+        self.shadowfb.allocate(self.shadow_map_resolution)
+
+    def new_spot_light(self,generate_shadow_map = True):
+        return (self.lights.new_spot_light(generate_shadow_map,self.shadow_map_resolution))
 
     def drawScene(self):
-    #Draw to shadow map textures
-        for l in self.lights.spots:
-            if l.generates_shadow_map:
-                self.drawSpotLightShadows(l)
+    #Draw to shadow map textures 
+        self.drawSpotLightShadows()
 
-    
     #Attach default framebuffer and clear it
-        self.shadowfb.unbind()
+        # self.shadowfb.unbind()
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-
-    #Reset texture unit count
-        # self.frame_textures = 0
 
     #Draw cubemap 
         if self.cubemap != None:
@@ -108,21 +107,29 @@ class Scene(object):
             self.frames = 0
             self.time = time
         
-    def drawSpotLightShadows(self,l):
-    # Set shaders
-        glUseProgram(self.shadowfb.program)
+    def drawSpotLightShadows(self):
+
+    # Set viewport for shadow texture buffer
+        shadow_res = self.shadowfb.resolution
+        glViewport(0,0,shadow_res,shadow_res)
+        for l in self.lights.spots:
+            if l.generates_shadow_map:
+    # Set shadowbuffer shaders
+                glUseProgram(self.shadowfb.program)
     # Setup shadow framebuffer
-        if not self.shadowfb.setup(l.shadow_texture.location):
-            print 'Error drawing spotlight: Problem generating framebuffer'
-            return
+                if not self.shadowfb.setup(l.shadow_texture.location):
+                    print 'Error drawing spotlight: Problem generating framebuffer'
+                    return
     # Draw Objects
-        glClear(GL_DEPTH_BUFFER_BIT)
-        cam = l.cam()
-        for obj in self.models:
-            self.drawObjectShadow(obj,cam)
-        self.shadowfb.unbind()
-        glUseProgram(self.active_program)
-        glBindFramebuffer(GL_FRAMEBUFFER, 0)
+                glClear(GL_DEPTH_BUFFER_BIT)
+                for obj in self.models:
+                    self.drawObjectShadow(obj,l.cam())
+                self.shadowfb.unbind()
+                glUseProgram(self.active_program)
+                glBindFramebuffer(GL_FRAMEBUFFER, 0)
+
+    # Set viewport for normal drawing
+        glViewport(0,0,self.screen.size[0],self.screen.size[1])
 
     def drawCubemap(self):
         self.cubemap.use_program()
@@ -134,7 +141,9 @@ class Scene(object):
         self.cubemap.draw(mvpTransf)
 
     def drawObject(self,obj, transf = mat4(1.0)):
+
         cam = self.cam
+        # cam = self.lights.spots[0].cam()
 
         if type(obj) is Model_Set:
             new_transf = transf * obj.props.transf()
@@ -163,6 +172,12 @@ class Scene(object):
             view = cam.transf()
             transf_array = numpy.array([val for val in view], dtype="float32")
             loc = glGetUniformLocation(self.active_program,"in_View")
+            glUniformMatrix4fv(loc, 1, GL_FALSE, transf_array)
+
+        #View inverse transform
+            viewInv = cam.transf().inverse()
+            transf_array = numpy.array([val for val in viewInv], dtype="float32")
+            loc = glGetUniformLocation(self.active_program,"in_ViewInv")
             glUniformMatrix4fv(loc, 1, GL_FALSE, transf_array)
 
         #Set projection transform

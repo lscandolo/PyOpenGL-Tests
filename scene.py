@@ -17,7 +17,7 @@ class Scene(object):
         self.frames = 0
         self.shadowfb = ShadowFB()
         self.screen = Screen()
-        self.shadow_map_resolution = 512
+        self.shadow_map_resolution = 2048
 
     def load3dsModel(self,filename):
         model = load3ds(filename)

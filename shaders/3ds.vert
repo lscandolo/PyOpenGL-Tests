@@ -17,8 +17,7 @@ smooth out vec3 ex_Normal;
 smooth out vec2 ex_TexCoord;
 smooth out vec3 ex_Tangent;
 smooth out vec3 ex_Bitangent;
-
-smooth out vec3 tbnView;
+smooth out vec3 ex_tbnView;
 
 void main(void)
 {
@@ -38,7 +37,7 @@ void main(void)
     (its transpose does the opposite)*/
   mat3 tbnTransf = transpose(mat3(ex_Tangent,ex_Bitangent,ex_Normal));
 
-  tbnView = tbnTransf * ex_Position;
+  ex_tbnView = tbnTransf * ex_Position;
 
 }
 

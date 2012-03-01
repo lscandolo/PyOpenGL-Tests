@@ -1,6 +1,6 @@
 // Vertex Shader – file "minimal.vert"
 
-#version 140
+#version 330
 
 uniform mat4 in_Modelview;
 uniform mat4 in_Projection;

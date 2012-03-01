@@ -1,4 +1,4 @@
-#!/usr/bin/python2.6 -tt
+#!/usr/bin/python -tt
 import OpenGL
 OpenGL.ERROR_ON_COPY = True
 # OpenGL.ERROR_LOGGING = False
@@ -20,7 +20,8 @@ import cgkit
 from cgkit.all import quat, mat4, vec3, vec4
 from model import Model_Texture, Model_Set, Model_Object
 
-frames = 0
+main_program = None
+sec_program =  None
 
 def vbo_offset(offset):
     return ctypes.c_void_p(offset * 4)
@@ -41,10 +42,16 @@ def mouseFunc(x,y,scene):
         glutWarpPointer(w/2,h/2)
 
 def keyPressed(key,x,y,scene):
+    global main_program
+    global sec_program
     delta = 0.05
     cam = scene.cam
-    if key == '\033':
+    if key == '\033' or key == 'q':
         sys.exit(1)
+    if key == '1':
+        scene.active_program = main_program
+    if key == '2':
+        scene.active_program = sec_program
     if key == 'w':
         delta_pos = - cam.rot() * vec3(0,0,1)
         for i in range(0,3):
@@ -73,7 +80,7 @@ def keyPressed(key,x,y,scene):
 
             
     light = scene.lights.spots[0]
-    model = scene.models[1]
+    model = scene.models[0]
 
     if key == 't':
         model.props.pos.x += 0.1
@@ -105,7 +112,7 @@ def keyPressed(key,x,y,scene):
     if key == 'i':
         light.pos.y -= 0.1
             
-def initShaders(v_filename, f_filename):
+def initShaders(v_filename, f_filename, g_filename = None):
     v_shader = glCreateShader(GL_VERTEX_SHADER)
     v_shader_source = [open(v_filename,'r').read()]
     glShaderSource(v_shader,v_shader_source)
@@ -114,25 +121,47 @@ def initShaders(v_filename, f_filename):
     f_shader_source = [open(f_filename,'r').read()]
     glShaderSource(f_shader,f_shader_source)
 
+    g_shader = None
+
     program = glCreateProgram()
     glAttachShader(program,v_shader)
     glAttachShader(program,f_shader)
 
+    print "Initialized v and f shaders"
+
+    if (g_filename != None):
+        g_shader = glCreateShader(GL_GEOMETRY_SHADER)
+        print "Created g shader"
+        g_shader_source = [open(g_filename,'r').read()]
+        print "Read g_filename"
+        glShaderSource(g_shader,g_shader_source)
+        print "Attached source to g shader"
+        glAttachShader(program,g_shader)
+        print "Attached g shader to program"
+        glCompileShader(g_shader)
+        print "Compiled g shader: " + glGetShaderInfoLog(g_shader)
+
     glCompileShader(v_shader)
     glCompileShader(f_shader)
     
+    print "Compiled v and f shader"
     glLinkProgram(program)
+    print "Linked program"
     glValidateProgram(program)
     
     print "/////////////////Main  shaders status:"
     print glGetShaderInfoLog(v_shader)
     print glGetShaderInfoLog(f_shader)
+    if (g_filename != None):
+        print glGetShaderInfoLog(g_shader)
     print glGetProgramInfoLog(program)
     print "Main program location:", program
     print "///////////////////////////////////////"
 
     glUseProgram(program)
     return program
+
+
 
 def startOpengl(w,h):
     glutInit(sys.argv)
@@ -161,62 +190,84 @@ def startOpengl(w,h):
 def main():
 
     scene = Scene()
-    scene.screen.size = (500,400)
+    scene.screen.size = (800,600)
     startOpengl(scene.screen.size[0],scene.screen.size[1])
 
-    scene.active_program = initShaders("shaders/3ds.vert", "shaders/3ds.frag")
+    global main_program
+
+    print 'Initializing main shaders'
+    main_program = initShaders("shaders/3ds.vert", 
+                                      "shaders/3ds.frag",
+                                      "shaders/detail-3ds.geom")
+    
+    global sec_program
+    print 'Initializing secondary shaders'
+    sec_program = initShaders("shaders/parallaxOcclusionSelfShadow.vert", 
+                              "shaders/parallaxOcclusionSelfShadow.frag")
+
+
+    scene.active_program = main_program
+
+    # scene.active_program = initShaders("shaders/3ds.vert", "shaders/3ds.frag")
     # scene.active_program = initShaders("shaders/parallax.vert", "shaders/parallax.frag")
     # scene.active_program = initShaders("shaders/relief.vert", "shaders/relief.frag")
 
     scene.initShadowFB()
 
-    floor_index = scene.loadObjModel('models/floor.obj')
-    teapot_index = scene.loadObjModel('models/teapot.obj')
+    # teapot_index = scene.loadObjModel('models/teapot.obj')
+    # if teapot_index == None:
+    #     print 'Error loading model'
+    #     exit(-1)
+    # teapot = scene.models[teapot_index]
+    # for m in teapot.models:
+    #     m.material.ambient = vec4(1,0.2,0.2,1)
+    #     tm = m.material.texture1_map
+    #     nm = m.material.normal_map
+    #     hm = m.material.height_map
+    #     tm.name = 'textures/masonry_wall-texture.jpg'
+    #     hm.name = 'textures/masonry_wall-height_map.jpg'
+    #     nm.name = 'textures/masonry_wall-normal_map.jpg'
+    #     sc = 4
+    #     tm.scale = (sc,sc)
+    #     hm.scale = (sc,sc)
+    #     nm.scale = (sc,sc)
+    #     tm.set = True
+    #     hm.set = True
+    #     nm.set = True
 
-    if floor_index or teapot_index == None:
+    # floor_index = scene.loadObjModel('models/floor.obj')
+    floor_index = scene.loadObjModel('models/grid.obj')
+    if floor_index == None:
         print 'Error loading model'
         exit(-1)
-
     floor = scene.models[floor_index]
-    teapot = scene.models[teapot_index]
-
     floor.props.pos = vec3(0,-0.5,3)
     floor.props.scale = vec3(1)
-
-    for m in teapot.models:
-        m.material.ambient = vec4(1,0.2,0.2,1)
-        tm = m.material.texture1_map
-        nm = m.material.normal_map
-        hm = m.material.height_map
-        tm.name = 'textures/masonry_wall-texture.jpg'
-        hm.name = 'textures/masonry_wall-height_map.jpg'
-        nm.name = 'textures/masonry_wall-normal_map.jpg'
-        sc = 4
-        tm.scale = (sc,sc)
-        hm.scale = (sc,sc)
-        nm.scale = (sc,sc)
-        tm.set = False
-        hm.set = False
-        nm.set = False
 
     for m in floor.models:
         m.material.bump_height = 0.015
         m.material.ambient = vec4(0.8,0.8,1,1)
+        m.material.shininess = 0
 
         tm = m.material.texture1_map
         nm = m.material.normal_map
         hm = m.material.height_map
 
-        tm.name = 'textures/brickwork-texture.jpg'
-        hm.name = 'textures/brickwork-height_map.jpg'
-        nm.name = 'textures/brickwork-normal_map.jpg'
+        # tm.name = 'textures/grass-texture.jpg'
+        tm.name = 'textures/masonry_wall-texture.jpg'
+        hm.name = 'textures/masonry_wall-height_map.jpg'
+        # hm.name = 'textures/heightmap1-1024.jpg'
+        # nm.name = 'textures/masonry_wall-normal_map.jpg'
+        # tm.name = 'textures/brickwork-texture.jpg'
+        # hm.name = 'textures/brickwork-height_map.jpg'
+        # nm.name = 'textures/brickwork-normal_map.jpg'
 
-        sc = 2
+        sc = 0.5
         tm.scale = (sc,sc)
         hm.scale = (sc,sc)
         nm.scale = (sc,sc)
-        tm.set = False
-        hm.set = False
+        tm.set = True
+        hm.set = True
         nm.set = False
 
         # sm = m.material.shininess_map
@@ -254,11 +305,11 @@ def main():
     # spot_light.color = vec3(1,1,1)
 
     spot_light = scene.new_spot_light()
-    spot_light.pos = vec3(0,3,-1)
-    spot_light.dir = vec3(0,-1,1).normalize()
-    spot_light.reach = 20
-    spot_light.dist_dimming = 0.5
-    spot_light.ang_dimming = 0.5
+    spot_light.pos = vec3(0,10,10)
+    spot_light.dir = vec3(0,-1,-1).normalize()
+    spot_light.reach = 40
+    spot_light.dist_dimming = 0.2
+    spot_light.ang_dimming = 0.2
     spot_light.color = vec3(1,1,1)
 
     glutDisplayFunc(lambda : scene.drawScene())

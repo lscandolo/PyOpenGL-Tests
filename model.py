@@ -364,7 +364,7 @@ class Model_Texture():
         try:
             im = ImageOps.flip(Image.open(self.tex_file).convert('RGB'))
         except IOError:
-            print "Error opening file", tex_file
+            print "Error opening file", self.tex_file
             exit(-1)
 
         texdata = im.getdata()

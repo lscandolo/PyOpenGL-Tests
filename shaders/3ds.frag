@@ -8,12 +8,12 @@ uniform mat4 in_ViewInv;
 uniform mat4 in_Projection;
 
 /* --------------------- Geometry data --------------------*/
-smooth in vec3 ex_Color;
-smooth in vec3 ex_Normal;
-smooth in vec2 ex_TexCoord;
-smooth in vec3 ex_Position;
-smooth in vec3 ex_Tangent;
-smooth in vec3 ex_Bitangent;
+smooth in vec3 Color;
+smooth in vec3 Normal;
+smooth in vec2 TexCoord;
+smooth in vec3 Position;
+smooth in vec3 Tangent;
+smooth in vec3 Bitangent;
 smooth in vec3 tbnView;
 
 /* -------------------- Material variables ----------------- */
@@ -92,7 +92,7 @@ mat2 tex_scale(vec2 sc){
   return mat2(sc.s,0,0,sc.t);
 }
 
-vec2 tex_coords(TextureMap map, vec2 coords){
+vec2 tex_map_coords(TextureMap map, vec2 coords){
   return tex_scale(map.scale)*tex_rot(map.rotation)*(coords-map.offset);
 }
 
@@ -111,7 +111,7 @@ vec3 reflected_light(vec3 f_col, vec3 f_pos, vec3 f_nor,
 
   if (spot_light[i].has_shadow_map){
 
-    vec4 cam_pos = spot_light[0].transf * in_ViewInv * vec4(ex_Position,1.0);
+    vec4 cam_pos = spot_light[0].transf * in_ViewInv * vec4(Position,1.0);
     vec3 shadow_coord = cam_pos.xyz / cam_pos.w;
     shadow_coord = shadow_coord/2.f + vec3(0.5f,0.5f,0.5f);
     shadow_coord.z -= 0.001f;
@@ -167,7 +167,7 @@ vec3 reflected_light(vec3 f_col, vec3 f_pos, vec3 f_nor,
 /*   if (!spot_light[l].has_shadow_map) */
 /*     return true; */
 
-/*   vec4 cam_pos = spot_light[l].transf * in_ViewInv * vec4(ex_Position,1.0); */
+/*   vec4 cam_pos = spot_light[l].transf * in_ViewInv * vec4(Position,1.0); */
 /*   vec3 shadow_coord = cam_pos.xyz / cam_pos.w; */
 /*   shadow_coord = shadow_coord/2.f + vec3(0.5f,0.5f,0.5f); */
 /*   shadow_coord.z -= 0.001f; */
@@ -204,19 +204,20 @@ void main(void)
   self_ilpct = mat_self_ilpct;
   transparency = mat_transparency;
 
-  vec2 tex_coords =  ex_TexCoord;
-  vec3 normal = ex_Normal;
+  vec2 tex_coords =  TexCoord;
+  vec3 normal = Normal;
+
 
   ////--------------------Parallax Mapping if we have a height map
-  /* if (false){ */
-  if (height_map.set){
+  if (false){
+  /* if (height_map.set){ */
     float height_factor = mat_bump_height;
     float bias_factor = mat_bump_bias;
     float h;
     int iterations = 3;
     vec2 parallax = -normalize(tbnView).xy;
-    tex_coords =  tex_coords(height_map,ex_TexCoord);
 
+    tex_coords =  tex_map_coords(height_map,TexCoord);
     //We iterate to get higher accuracy
     for (; iterations > 0; iterations--){
       h = texture(height_map.tex,tex_coords.xy).x;
@@ -228,21 +229,23 @@ void main(void)
 
   //// Color Texture retrieval
   if (texture1_map.set){
-    ambient = texture(texture1_map.tex,tex_coords).xyz * texture1_map.percent;
+    vec2 tex1_coords =  tex_map_coords(texture1_map,tex_coords);
+    ambient = texture(texture1_map.tex,tex1_coords).xyz * texture1_map.percent;
     diffuse = ambient;
   }
 
   ////////// Normal mapping
   if (normal_map.set){
-    normal =  texture(normal_map.tex,tex_coords).xyz - vec3(0.5,0.5,0.5);
-    normal = mat3(ex_Tangent,ex_Bitangent,ex_Normal) * normal;
+    vec2 normal_coords = tex_map_coords(normal_map,tex_coords);
+    normal =  texture(normal_map.tex,normal_coords).xyz - vec3(0.5,0.5,0.5);
+    normal = mat3(Tangent,Bitangent,Normal) * normal;
     normal = normalize(normal);
   }
 
   //////// Reflections
   if (reflection_map.set){
     mat3 transf = mat3(in_ModelviewInv);
-    vec3 ref = reflect(transf*ex_Position,transf*normal);
+    vec3 ref = reflect(transf*Position,transf*normal);
     ambient += texture(reflection_map.tex,ref).xyz * reflection_map.percent;
     diffuse = ambient;
   }
@@ -254,11 +257,23 @@ void main(void)
   /////// Lighting computation
   vec3 spot_color = vec3(0.f);
   for (int l = 0; l < 1; l++){ // Change 1 to spot_light_count!
-    spot_color += reflected_light(diffuse, ex_Position, normal, shininess,l);
+    spot_color += reflected_light(diffuse, Position, normal, shininess,l);
   }
 
   vec3 color = ambient_color;
   color += spot_color;
+
+
+  /////////////!! Test to show height color
+  /* vec4 worldCoord = in_ModelviewInv * vec4(Position,1.f); */
+  /* float worldHeight = worldCoord.y; */
+
+  /* float h_r = worldHeight < 5.f? (5.f - worldHeight)/5.f : 0.f; */
+  /* float h_g = worldHeight > 2.5f && worldHeight < 7.5f? .8f-abs(worldHeight-5.f)/2.5f : 0.f; */
+  /* float h_b = worldHeight > 5.f? (worldHeight - 5.f)/5.f : 0.f; */
+  /* vec3 fragcolor = vec3(h_r,h_g,h_b); */
+  /* color += fragcolor; */
+  //////////////////////!!
 
   gl_FragColor = vec4(color,transparency);
   gl_FragDepth = gl_FragCoord.z;
